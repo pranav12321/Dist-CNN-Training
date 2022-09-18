@@ -18,6 +18,10 @@ submission/
 cfg/
 darknet
 .fuse*
+*.so
+*.lib
+ftp_main
+*.a
 
 # OS Generated #
 .DS_Store*

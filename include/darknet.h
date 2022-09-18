@@ -239,6 +239,7 @@ struct layer{
     float * weight_updates;
 
     float * delta;
+    float * delta_with_boundry;
     float * output;
     float * loss;
     float * squared;

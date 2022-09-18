@@ -501,3 +501,24 @@ int main(int argc, char **argv)
     return 0;
 }
 
+void print_layer(network* net, int idx){
+    for (int i = 0; i < 10; ++i)
+    {
+        for (int j = 0; j < 10; ++j)
+        {
+            printf("%.2f ", net->input[i*6 + j]);
+        }
+
+        printf("\n");
+    }
+
+    for (int i = 0; i < 3; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            printf("%.2f ", net->layers[idx].weights[i*3 + j]);
+        }
+
+        printf("\n");
+    }
+}

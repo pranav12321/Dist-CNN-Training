@@ -193,6 +193,8 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.batch_normalize = batch_normalize;
 
     l.weights = calloc(c/groups*n*size*size, sizeof(float));
+    //l.weights = calloc(c/groups*n*size*size, sizeof(float));
+    printf("weight size %d\n", c/groups*n*size*size);
     l.weight_updates = calloc(c/groups*n*size*size, sizeof(float));
 
     l.biases = calloc(n, sizeof(float));
@@ -209,6 +211,7 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     for(i = 0; i < l.nweights; ++i) l.weights[i] = scale*rand_normal();
     int out_w = convolutional_out_width(l);
     int out_h = convolutional_out_height(l);
+
     l.out_h = out_h;
     l.out_w = out_w;
     l.out_c = n;
@@ -217,6 +220,7 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
 
     l.output = calloc(l.batch*l.outputs, sizeof(float));
     l.delta  = calloc(l.batch*l.outputs, sizeof(float));
+    l.delta_with_boundry  = calloc(l.batch*l.outputs, sizeof(float));
 
     l.forward = forward_convolutional_layer;
     l.backward = backward_convolutional_layer;
@@ -530,6 +534,73 @@ void backward_convolutional_layer(convolutional_layer l, network net)
                 if (l.size != 1) {
                     col2im_cpu(net.workspace, l.c/l.groups, l.h, l.w, l.size, l.stride, l.pad, imd);
                 }
+            }
+        }
+    }
+}
+
+void backward_convolutional_layer_dist(convolutional_layer l, network net)
+{
+    int i, j;
+    int m = l.n/l.groups;
+    int n = l.size*l.size*l.c/l.groups;
+    int k = l.out_w*l.out_h;
+
+    gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
+
+    if(l.batch_normalize){
+        backward_batchnorm_layer(l, net);
+    } else {
+        backward_bias(l.bias_updates, l.delta, l.batch, l.n, k);
+    }
+
+    for(i = 0; i < l.batch; ++i){
+        for(j = 0; j < l.groups; ++j){
+            float *a = l.delta + (i*l.groups + j)*m*k;
+            float *b = net.workspace;
+            float *c = l.weight_updates + j*l.nweights/l.groups;
+
+            float *im  = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+            float *imd = net.delta + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+
+            if(l.size == 1){
+                b = im;
+            } else {
+                im2col_cpu(im, l.c/l.groups, l.h, l.w, 
+                        l.size, l.stride, l.pad, b);
+            }
+
+            gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
+
+            if (net.delta) {
+                a = l.weights + j*l.nweights/l.groups;
+                b = l.delta_with_boundry + (i*l.groups + j)*m*k;
+                c = net.workspace;
+                if (l.size == 1) {
+                    c = imd;
+                }
+
+                gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
+
+                if (l.size != 1) {
+                    col2im_cpu(net.workspace, l.c/l.groups, l.h, l.w, l.size, l.stride, l.pad, imd);
+                }
+
+                //TODO:: Try to avoid this seemingly redundant computattion just to get delta without boundry;
+                        //Need to just figure out how much of boundry to discard/0 out
+                // a = l.weights + j*l.nweights/l.groups;
+                // b = l.delta + (i*l.groups + j)*m*k;
+                // c = net.workspace;
+                // if (l.size == 1) {
+                //     c = imd;
+                // }
+                // gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
+
+                // if (l.size != 1) {
+                //     col2im_cpu(net.workspace, l.c/l.groups, l.h, l.w, l.size, l.stride, l.pad, imd);
+                // }
+
+                
             }
         }
     }
