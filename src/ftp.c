@@ -5,1268 +5,1105 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-void* execute_devi(void* ptr){
-     char *message;
-     message = (char *) ptr;
-     printf("%s \n", message);
-}
-
 extern sem_t filter_diverge;
 extern sem_t filter_converge;
 
-void* execute_dev(void* ptr){
+typedef enum orientation{
+    TOP,
+    LEFT,
+    BOTTOM,
+    RIGHT,
+    TOP_LEFT,
+    BOTTOM_LEFT,
+    BOTTOM_RIGHT,
+    TOP_RIGHT,
+} orientation;
 
-    printf("Thread started exec_device\n\n");
-    //while(1);
+void get_boundry_data_forward(network*** SHARED_NETWORKS, float***SHARED_INPUT_IMAGES,
+    int NUM_TILES_X, int NUM_TILES_Y,
+    int current_layer_idx, 
+    float** device_data, 
+    int rows, int cols, orientation region,
+    int device_src_id_x, int device_src_id_y, 
+    int device_dst_id_x, int device_dst_id_y) {
 
-    device_ftp_args* ftp_args = (device_ftp_args*) ptr;
+    float* boundry_data = calloc(rows*cols, sizeof(float));
+    *device_data = boundry_data;
+    //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
 
-    int device_id = ftp_args->device_id;
-    int im_width = ftp_args->im_width;
-    int im_height = ftp_args->im_height;
-    int filter_size = ftp_args->filter_size;
-    float* image = ftp_args->image;
-    float* delta = ftp_args->delta;
-    float* boundry_top = ftp_args->boundry_top;
-    float* boundry_bottom = ftp_args->boundry_bottom;
-    float* boundry_left = ftp_args->boundry_left;
-    float* boundry_right = ftp_args->boundry_right;
-    float* boundry_top_right = ftp_args->boundry_top_right;
-    float* boundry_top_left = ftp_args->boundry_top_left;
-    float* boundry_bottom_right = ftp_args->boundry_bottom_right;
-    float* boundry_bottom_left = ftp_args->boundry_bottom_left;
-    int num_layers = ftp_args->num_layers;
-    float* output = ftp_args->output;
-    float*** SHARED_WEIGHT_UPDATES = ftp_args->SHARED_WEIGHT_UPDATES;
+    int x_dim;
+    int y_dim; 
 
-    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
-    int boundry_frames = unit_boundry*num_layers;
-    int core_image_width = im_width - (2*boundry_frames);
-    int core_image_height = im_height - (2*boundry_frames);
+    float* boundry_src_data;
 
-    network *net = calloc(1, sizeof(network));
-    net->n = num_layers;
-    net->layers = calloc(net->n, sizeof(layer));
-    net->seen = calloc(1, sizeof(size_t));
-    net->t    = calloc(1, sizeof(int));
-    net->cost = calloc(1, sizeof(float));
-    net->layers[0] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[1] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);  
-    net->layers[0].batch_normalize = 0;
-    net->layers[1].batch_normalize = 0;
-    net->layers[2].batch_normalize = 0;
-    net->layers[3].batch_normalize = 0;
-    net->layers[4].batch_normalize = 0;
-
-    printf("%d, %d %d %d %d\n", im_height, im_width, core_image_height, core_image_width, boundry_frames);
-
-    //net->layers[0].data = calloc(1, sizeof(float));
-    net->input = calloc(im_width*im_height, sizeof(float));
-    net->workspace = calloc(net->layers[0].workspace_size, sizeof(float));
-    net->inputs = im_width*im_height;
-
-    fill_cpu(im_width*im_height, 0, net->layers[0].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[1].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[2].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[3].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-
-    for (int i = 0; i < filter_size; ++i)
-    {
-        for (int j = 0; j < filter_size; ++j)
-        {
-            net->layers[0].weights[i*filter_size + j] = 0.1;
-            net->layers[1].weights[i*filter_size + j] = 0.1;
-            net->layers[2].weights[i*filter_size + j] = 0.1;
-            net->layers[3].weights[i*filter_size + j] = 0.1;
-            net->layers[4].weights[i*filter_size + j] = 0.1;
-        }
+    if((device_src_id_x >= NUM_TILES_X) && 
+        (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_x < 0) && 
+        (region == TOP_RIGHT || region == RIGHT || region == BOTTOM_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_y >= NUM_TILES_Y) && 
+        (region == TOP_LEFT || region == TOP || region == TOP_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_y < 0) && 
+        (region == BOTTOM_LEFT || region == BOTTOM || region == BOTTOM_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
     }
 
-    //Core image
+    if(current_layer_idx == 0){
+        x_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[0].w;
+        y_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[0].h;
+        boundry_src_data = SHARED_INPUT_IMAGES[device_src_id_y][device_src_id_x];
+    }
+    else{
+        x_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx - 1].out_w;
+        y_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx - 1].out_h;
+        boundry_src_data = SHARED_NETWORKS[device_src_id_y][device_src_id_x]->layers[current_layer_idx - 1].output;
 
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+boundry_frames)] = image[(i*core_image_width) + j];
-        }
     }
 
-    //Top left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + j] = boundry_top_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + (j+im_width-boundry_frames)] = boundry_top_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*(im_width) + j] = boundry_bottom_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*im_width + (j+im_width-boundry_frames)] = boundry_bottom_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top
-
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i*im_width) + (j+boundry_frames)] = boundry_top[(i*core_image_width) + j];
-        }
-    }
-
-    //Left
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j)] = boundry_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Right
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+core_image_width+boundry_frames)] = boundry_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+core_image_height+boundry_frames)*im_width + (j+boundry_frames)] = boundry_bottom[(i*core_image_width) + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.2f ", net->input[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // printf("\n");
-//###END DEBUG
-
-    net->index = 0;
-    forward_convolutional_layer(net->layers[0], *net);
-    net->input = net->layers[0].output;
-    net->index = 1;
-    forward_convolutional_layer(net->layers[1], *net);
-    net->input = net->layers[1].output;
-    net->index = 2;
-    forward_convolutional_layer(net->layers[2], *net);
-    net->input = net->layers[2].output;
-    net->index = 3;
-    forward_convolutional_layer(net->layers[3], *net);
-    net->input = net->layers[3].output;
-    net->index = 4;
-    forward_convolutional_layer(net->layers[4], *net);
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].output[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-
-    //fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[4].delta[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-    for (int i = 0; i < im_height; ++i)
-    {
-        for (int j = 0; j < im_width; ++j)
-        {
-            net->layers[4].delta_with_boundry[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].delta[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[3].output;
-    net->delta = net->layers[3].delta_with_boundry;
-    net->index = 4;
-    backward_convolutional_layer_dist(net->layers[4], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[3].delta[i*im_width + j] = net->layers[3].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-    // for (int i = 0; i < 3; ++i)
-    // {
-    //     for (int j = 0; j < 3; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weights[(i*3) + j]);
-    //     }
-    //     printf("\n");
-    // }
-
-    // for (int i = 0; i < filter_size; ++i)
-    // {
-    //     for (int j = 0; j < filter_size; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weight_updates[(i*filter_size) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[3].delta_with_boundry[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[2].output;
-    net->delta = net->layers[2].delta_with_boundry;
-    net->index = 3;
-    backward_convolutional_layer_dist(net->layers[3], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[2].delta[i*im_width + j] = net->layers[2].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    for (int i = 0; i < 3; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            printf("%.4f ", net->layers[3].weight_updates[(i*3) + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[1].output;
-    net->delta = net->layers[1].delta_with_boundry;
-    net->index = 2;
-    backward_convolutional_layer_dist(net->layers[2], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[1].delta[i*im_width + j] = net->layers[1].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    net->input = net->layers[0].output;
-    net->delta = net->layers[0].delta_with_boundry;
-    net->index = 1;
-    backward_convolutional_layer_dist(net->layers[1], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[0].delta[i*im_width + j] = net->layers[0].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    //update_convolutional_layer(l, update_args a);
-
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            output[i*core_image_width + j] = net->layers[0].delta_with_boundry[(i+boundry_frames)*im_width + j+boundry_frames];
-        }
-    }
-
-    for (int i = 0; i < num_layers; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            for (int k = 0; k < 3; ++k)
+    switch(region) {
+        case TOP_LEFT:
+            for (int i = 0; i < rows; ++i)
             {
-               SHARED_WEIGHT_UPDATES [device_id][i][j*3 + k] = net->layers[i].weight_updates[(j*3) + k];
-            }
-        }   
-    }
-    sem_post(&filter_diverge);
-    printf("DEVICE %d Partial sum computation complete\n", device_id);
-
-    int sema_value;
-    sem_getvalue(&filter_converge, &sema_value);
-    
-    sem_wait(&filter_converge);
-
-    printf("DEVICE %d Partial sum merge complete\n", device_id);
-
-    //Update weights here
-    for (int i = 0; i < num_layers; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            for (int k = 0; k < 3; ++k)
-            {
-              net->layers[i].weight_updates[(j*3) + k] = SHARED_WEIGHT_UPDATES [0][i][j*3 + k];
-            }
-        }   
-    }
-
-    update_args a = {
-        1,
-        0.005,
-        1,
-        1,
-        1,
-        0.5,
-        0.5,
-        2.0,
-        1,
-    };
-
-    for (int i = 0; i < num_layers; ++i)
-    {
-        update_convolutional_layer(net->layers[i], a);
-    }
-
-
-    // for (int i = 0; i < num_layers; ++i)
-    // {
-    //     printf("Layer weights %d\n", i);
-    //     for (int j = 0; j < 3; ++j)
-    //     {
-    //         for (int k = 0; k < 3; ++k)
-    //         {
-    //           printf("%.4f ", net->layers[i].weight_updates[(j*3) + k]);
-    //         }
-    //         printf("\n");
-    //     }  
-    //     printf("\n\n"); 
-    // }
-
-//### DEBUG
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.2f ", net->layers[0].delta_with_boundry[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-
-//###END DEBUG
-
-
-}
-
-//1) layer_size_x_+1 = ceil(layer_Size_X_+1/TILES_X)
-//2) pattern = filter_size + n*(stride) n = 0, 1, 2, 3....
-//3) find largest n such that pattern <= layer_size_x -> this marks the last element idx in that tile
-                                                        //feature map in x direction
-                                                        //Rest (if any are ignored/passed onto next tile)
-    //Let this n be called n_last_tile_x
-    //Also, let the total elements needed for that tile filter_size + n*(stride) = total_tile_x_desired
-    
-//4) If tile_idx_x happens to be 0 or TILES_X - 1, subtract padding from total_tile_x_desired
-        //Add 2*padding to total_tile_x_desired
-        //total_tile_x_desired = total_tile_x_desired + 2*padding
-    //If not an edge tile, 
-
-//5) If device_tile_idx_x > 0,
-        //get the start idx for convolution from device_tile_idx_x - 1/gateway;
-        //call this conv_start_idx_tile_x (this is inclusive of the padding start)
-        //if this start idx is < 0, get that many cols of edge data from device_tile_idx_x - 1 (or pad 0s if device tile idx x is 0)
-            //and tile_x_desired - |device_tile_idx_x| from device_tile_idx_x + 1 (or pad 0s if last tile in X)
-//  if this start idx is >= 0, get total_tile_x_desired - X_default_size - start idx from device_tile_idx_x + 1
-void* execute_dev_v2(void* ptr){
-
-    printf("Thread started exec_device\n\n");
-    //while(1);
-
-    device_ftp_args* ftp_args = (device_ftp_args*) ptr;
-
-    int device_id = ftp_args->device_id;
-    int im_width = ftp_args->im_width;
-    int im_height = ftp_args->im_height;
-    int filter_size = ftp_args->filter_size;
-    float* image = ftp_args->image;
-    float* delta = ftp_args->delta;
-    float* boundry_top = ftp_args->boundry_top;
-    float* boundry_bottom = ftp_args->boundry_bottom;
-    float* boundry_left = ftp_args->boundry_left;
-    float* boundry_right = ftp_args->boundry_right;
-    float* boundry_top_right = ftp_args->boundry_top_right;
-    float* boundry_top_left = ftp_args->boundry_top_left;
-    float* boundry_bottom_right = ftp_args->boundry_bottom_right;
-    float* boundry_bottom_left = ftp_args->boundry_bottom_left;
-    int num_layers = ftp_args->num_layers;
-    float* output = ftp_args->output;
-    float*** SHARED_WEIGHT_UPDATES = ftp_args->SHARED_WEIGHT_UPDATES;
-
-    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
-    int boundry_frames = unit_boundry*num_layers;
-    int core_image_width = im_width - (2*boundry_frames);
-    int core_image_height = im_height - (2*boundry_frames);
-
-    network *net = calloc(1, sizeof(network));
-    net->n = num_layers;
-    net->layers = calloc(net->n, sizeof(layer));
-    net->seen = calloc(1, sizeof(size_t));
-    net->t    = calloc(1, sizeof(int));
-    net->cost = calloc(1, sizeof(float));
-    net->layers[0] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[1] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);  
-    net->layers[0].batch_normalize = 0;
-    net->layers[1].batch_normalize = 0;
-    net->layers[2].batch_normalize = 0;
-    net->layers[3].batch_normalize = 0;
-    net->layers[4].batch_normalize = 0;
-
-    printf("%d, %d %d %d %d\n", im_height, im_width, core_image_height, core_image_width, boundry_frames);
-
-    //net->layers[0].data = calloc(1, sizeof(float));
-    net->input = calloc(im_width*im_height, sizeof(float));
-    net->workspace = calloc(net->layers[0].workspace_size, sizeof(float));
-    net->inputs = im_width*im_height;
-
-    fill_cpu(im_width*im_height, 0, net->layers[0].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[1].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[2].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[3].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-
-    for (int i = 0; i < filter_size; ++i)
-    {
-        for (int j = 0; j < filter_size; ++j)
-        {
-            net->layers[0].weights[i*filter_size + j] = 0.1;
-            net->layers[1].weights[i*filter_size + j] = 0.1;
-            net->layers[2].weights[i*filter_size + j] = 0.1;
-            net->layers[3].weights[i*filter_size + j] = 0.1;
-            net->layers[4].weights[i*filter_size + j] = 0.1;
-        }
-    }
-
-    //Core image
-
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+boundry_frames)] = image[(i*core_image_width) + j];
-        }
-    }
-
-    //Top left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + j] = boundry_top_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + (j+im_width-boundry_frames)] = boundry_top_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*(im_width) + j] = boundry_bottom_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*im_width + (j+im_width-boundry_frames)] = boundry_bottom_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top
-
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i*im_width) + (j+boundry_frames)] = boundry_top[(i*core_image_width) + j];
-        }
-    }
-
-    //Left
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j)] = boundry_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Right
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+core_image_width+boundry_frames)] = boundry_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+core_image_height+boundry_frames)*im_width + (j+boundry_frames)] = boundry_bottom[(i*core_image_width) + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.2f ", net->input[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // printf("\n");
-//###END DEBUG
-
-    net->index = 0;
-    forward_convolutional_layer(net->layers[0], *net);
-    net->input = net->layers[0].output;
-    net->index = 1;
-    forward_convolutional_layer(net->layers[1], *net);
-    net->input = net->layers[1].output;
-    net->index = 2;
-    forward_convolutional_layer(net->layers[2], *net);
-    net->input = net->layers[2].output;
-    net->index = 3;
-    forward_convolutional_layer(net->layers[3], *net);
-    net->input = net->layers[3].output;
-    net->index = 4;
-    forward_convolutional_layer(net->layers[4], *net);
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].output[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-
-    //fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[4].delta[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-    for (int i = 0; i < im_height; ++i)
-    {
-        for (int j = 0; j < im_width; ++j)
-        {
-            net->layers[4].delta_with_boundry[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].delta[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[3].output;
-    net->delta = net->layers[3].delta_with_boundry;
-    net->index = 4;
-    backward_convolutional_layer_dist(net->layers[4], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[3].delta[i*im_width + j] = net->layers[3].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-    // for (int i = 0; i < 3; ++i)
-    // {
-    //     for (int j = 0; j < 3; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weights[(i*3) + j]);
-    //     }
-    //     printf("\n");
-    // }
-
-    // for (int i = 0; i < filter_size; ++i)
-    // {
-    //     for (int j = 0; j < filter_size; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weight_updates[(i*filter_size) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[3].delta_with_boundry[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[2].output;
-    net->delta = net->layers[2].delta_with_boundry;
-    net->index = 3;
-    backward_convolutional_layer_dist(net->layers[3], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[2].delta[i*im_width + j] = net->layers[2].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    for (int i = 0; i < 3; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            printf("%.4f ", net->layers[3].weight_updates[(i*3) + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[1].output;
-    net->delta = net->layers[1].delta_with_boundry;
-    net->index = 2;
-    backward_convolutional_layer_dist(net->layers[2], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[1].delta[i*im_width + j] = net->layers[1].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    net->input = net->layers[0].output;
-    net->delta = net->layers[0].delta_with_boundry;
-    net->index = 1;
-    backward_convolutional_layer_dist(net->layers[1], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[0].delta[i*im_width + j] = net->layers[0].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    //update_convolutional_layer(l, update_args a);
-
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            output[i*core_image_width + j] = net->layers[0].delta_with_boundry[(i+boundry_frames)*im_width + j+boundry_frames];
-        }
-    }
-
-    for (int i = 0; i < num_layers; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            for (int k = 0; k < 3; ++k)
-            {
-               SHARED_WEIGHT_UPDATES [device_id][i][j*3 + k] = net->layers[i].weight_updates[(j*3) + k];
-            }
-        }   
-    }
-    sem_post(&filter_diverge);
-    printf("DEVICE %d Partial sum computation complete\n", device_id);
-
-    int sema_value;
-    sem_getvalue(&filter_converge, &sema_value);
-    
-    sem_wait(&filter_converge);
-
-    printf("DEVICE %d Partial sum merge complete\n", device_id);
-
-    //Update weights here
-    for (int i = 0; i < num_layers; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            for (int k = 0; k < 3; ++k)
-            {
-              net->layers[i].weight_updates[(j*3) + k] = SHARED_WEIGHT_UPDATES [0][i][j*3 + k];
-            }
-        }   
-    }
-
-    update_args a = {
-        1,
-        0.005,
-        1,
-        1,
-        1,
-        0.5,
-        0.5,
-        2.0,
-        1,
-    };
-
-    for (int i = 0; i < num_layers; ++i)
-    {
-        update_convolutional_layer(net->layers[i], a);
-    }
-
-
-    // for (int i = 0; i < num_layers; ++i)
-    // {
-    //     printf("Layer weights %d\n", i);
-    //     for (int j = 0; j < 3; ++j)
-    //     {
-    //         for (int k = 0; k < 3; ++k)
-    //         {
-    //           printf("%.4f ", net->layers[i].weight_updates[(j*3) + k]);
-    //         }
-    //         printf("\n");
-    //     }  
-    //     printf("\n\n"); 
-    // }
-
-//### DEBUG
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.2f ", net->layers[0].delta_with_boundry[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-
-//###END DEBUG
-
-
-}
-
-
-
-
-void* execute_dev_gateway(void* ptr){
-
-    printf("Thread started exec_device\n\n");
-    //while(1);
-
-    device_ftp_args* ftp_args = (device_ftp_args*) ptr;
-
-    int NUM_DEVICES = ftp_args->NUM_DEVICES;
-    int device_id = ftp_args->device_id;
-    int im_width = ftp_args->im_width;
-    int im_height = ftp_args->im_height;
-    int filter_size = ftp_args->filter_size;
-    float* image = ftp_args->image;
-    float* delta = ftp_args->delta;
-    float* boundry_top = ftp_args->boundry_top;
-    float* boundry_bottom = ftp_args->boundry_bottom;
-    float* boundry_left = ftp_args->boundry_left;
-    float* boundry_right = ftp_args->boundry_right;
-    float* boundry_top_right = ftp_args->boundry_top_right;
-    float* boundry_top_left = ftp_args->boundry_top_left;
-    float* boundry_bottom_right = ftp_args->boundry_bottom_right;
-    float* boundry_bottom_left = ftp_args->boundry_bottom_left;
-    int num_layers = ftp_args->num_layers;
-    float* output = ftp_args->output;
-    float*** SHARED_WEIGHT_UPDATES = ftp_args->SHARED_WEIGHT_UPDATES;
-
-    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
-    int boundry_frames = unit_boundry*num_layers;
-    int core_image_width = im_width - (2*boundry_frames);
-    int core_image_height = im_height - (2*boundry_frames);
-
-    network *net = calloc(1, sizeof(network));
-    net->n = num_layers;
-    net->layers = calloc(net->n, sizeof(layer));
-    net->seen = calloc(1, sizeof(size_t));
-    net->t    = calloc(1, sizeof(int));
-    net->cost = calloc(1, sizeof(float));
-    net->layers[0] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[1] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, im_width, im_height, 1, 1, 1, filter_size, 1, 1, RELU, 1, 0, 0, 0);  
-    net->layers[0].batch_normalize = 0;
-    net->layers[1].batch_normalize = 0;
-    net->layers[2].batch_normalize = 0;
-    net->layers[3].batch_normalize = 0;
-    net->layers[4].batch_normalize = 0;
-
-    printf("%d, %d %d %d %d\n", im_height, im_width, core_image_height, core_image_width, boundry_frames);
-
-    //net->layers[0].data = calloc(1, sizeof(float));
-    net->input = calloc(im_width*im_height, sizeof(float));
-    net->workspace = calloc(net->layers[0].workspace_size, sizeof(float));
-    net->inputs = im_width*im_height;
-
-    fill_cpu(im_width*im_height, 0, net->layers[0].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[1].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[2].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[3].delta, 1);
-    fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-
-    for (int i = 0; i < filter_size; ++i)
-    {
-        for (int j = 0; j < filter_size; ++j)
-        {
-            net->layers[0].weights[i*filter_size + j] = 0.1;
-            net->layers[1].weights[i*filter_size + j] = 0.1;
-            net->layers[2].weights[i*filter_size + j] = 0.1;
-            net->layers[3].weights[i*filter_size + j] = 0.1;
-            net->layers[4].weights[i*filter_size + j] = 0.1;
-        }
-    }
-
-    //Core image
-
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+boundry_frames)] = image[(i*core_image_width) + j];
-        }
-    }
-
-    //Top left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + j] = boundry_top_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i*im_width) + (j+im_width-boundry_frames)] = boundry_top_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom left
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*(im_width) + j] = boundry_bottom_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom right
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+im_height-boundry_frames)*im_width + (j+im_width-boundry_frames)] = boundry_bottom_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Top
-
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i*im_width) + (j+boundry_frames)] = boundry_top[(i*core_image_width) + j];
-        }
-    }
-
-    //Left
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j)] = boundry_left[(i*boundry_frames) + j];
-        }
-    }
-
-    //Right
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < boundry_frames; ++j)
-        {
-            net->input[(i+boundry_frames)*im_width + (j+core_image_width+boundry_frames)] = boundry_right[(i*boundry_frames) + j];
-        }
-    }
-
-    //Bottom
-    for (int i = 0; i < boundry_frames; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            net->input[(i+core_image_height+boundry_frames)*im_width + (j+boundry_frames)] = boundry_bottom[(i*core_image_width) + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.2f ", net->input[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // printf("\n");
-//###END DEBUG
-
-    net->index = 0;
-    forward_convolutional_layer(net->layers[0], *net);
-    net->input = net->layers[0].output;
-    net->index = 1;
-    forward_convolutional_layer(net->layers[1], *net);
-    net->input = net->layers[1].output;
-    net->index = 2;
-    forward_convolutional_layer(net->layers[2], *net);
-    net->input = net->layers[2].output;
-    net->index = 3;
-    forward_convolutional_layer(net->layers[3], *net);
-    net->input = net->layers[3].output;
-    net->index = 4;
-    forward_convolutional_layer(net->layers[4], *net);
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].output[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-
-    //fill_cpu(im_width*im_height, 0, net->layers[4].delta, 1);
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[4].delta[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-    for (int i = 0; i < im_height; ++i)
-    {
-        for (int j = 0; j < im_width; ++j)
-        {
-            net->layers[4].delta_with_boundry[i*im_width + j] = delta[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].delta[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[3].output;
-    net->delta = net->layers[3].delta_with_boundry;
-    net->index = 4;
-    backward_convolutional_layer_dist(net->layers[4], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[3].delta[i*im_width + j] = net->layers[3].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-    // for (int i = 0; i < 3; ++i)
-    // {
-    //     for (int j = 0; j < 3; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weights[(i*3) + j]);
-    //     }
-    //     printf("\n");
-    // }
-
-    // for (int i = 0; i < filter_size; ++i)
-    // {
-    //     for (int j = 0; j < filter_size; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[4].weight_updates[(i*filter_size) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[3].delta_with_boundry[(i*im_width) + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[2].output;
-    net->delta = net->layers[2].delta_with_boundry;
-    net->index = 3;
-    backward_convolutional_layer_dist(net->layers[3], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[2].delta[i*im_width + j] = net->layers[2].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-//###DEBUG
-
-
-    for (int i = 0; i < 3; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            printf("%.4f ", net->layers[3].weight_updates[(i*3) + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-//###END DEBUG
-
-    net->input = net->layers[1].output;
-    net->delta = net->layers[1].delta_with_boundry;
-    net->index = 2;
-    backward_convolutional_layer_dist(net->layers[2], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[1].delta[i*im_width + j] = net->layers[1].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    net->input = net->layers[0].output;
-    net->delta = net->layers[0].delta_with_boundry;
-    net->index = 1;
-    backward_convolutional_layer_dist(net->layers[1], *net);
-
-    for (int i = boundry_frames; i < (im_height-boundry_frames); ++i)
-    {
-        for (int j = boundry_frames; j < (im_width-boundry_frames); ++j)
-        {
-            net->layers[0].delta[i*im_width + j] = net->layers[0].delta_with_boundry[i*im_width + j];
-        }
-    }
-
-    //update_convolutional_layer(l, update_args a);
-
-    for (int i = 0; i < core_image_height; ++i)
-    {
-        for (int j = 0; j < core_image_width; ++j)
-        {
-            output[i*core_image_width + j] = net->layers[0].delta_with_boundry[(i+boundry_frames)*im_width + j+boundry_frames];
-        }
-    }
-
-    for (int i = 0; i < num_layers; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
-            for (int k = 0; k < 3; ++k)
-            {
-               SHARED_WEIGHT_UPDATES [device_id][i][j*3 + k] = net->layers[i].weight_updates[(j*3) + k];
-            }
-        }   
-    }
-
-    sem_wait(&filter_diverge);
-    sem_wait(&filter_diverge);
-    sem_wait(&filter_diverge);
-    //sem_wait(&filter_diverge);
-    printf("GATEWAY: Threads completed filter partial sum computation\n");
-
-    for (int i = 0; i < filter_size; ++i)
-    {
-        for (int j = 0; j < filter_size; ++j)
-        {
-            for (int k = 0; k < num_layers; ++k)
-            {
-                for (int l = 1; l < NUM_DEVICES; ++l)
+                for (int j = 0; j < cols; ++j)
                 {
-                   SHARED_WEIGHT_UPDATES [0][k][i*3 + j] += SHARED_WEIGHT_UPDATES[l][k][i*3 + j];
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
                 }
             }
-        }   
+        break;
+
+        case BOTTOM_LEFT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j];
+                }
+            }
+        break;
+
+        case TOP_RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
+
+        case BOTTOM_RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
+
+        case TOP:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
+                }
+            }
+        break;
+
+        case LEFT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
+                }
+            }
+        break;
+
+        case BOTTOM:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j];
+                }
+            }
+        break;
+
+        case RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
     }
 
-   // sleep(5);
-    sem_post(&filter_converge);
-    sem_post(&filter_converge);
-    sem_post(&filter_converge);
-    printf("GATEWAY: Finished summing weights\n");
+}
 
-    int sema_value;
-    sem_getvalue(&filter_converge, &sema_value);
-    //printf("GATEWAY DEBUG %d\n", sema_value);
 
-    for (int i = 0; i < filter_size; ++i)
-    {
-        for (int j = 0; j < filter_size; ++j)
+void get_boundry_data_backward(network*** SHARED_NETWORKS, float*** SHARED_EXP_DELTAS,
+    int NUM_TILES_X, int NUM_TILES_Y,
+    int current_layer_idx, int num_layers,
+    float** device_data, 
+    int rows, int cols, orientation region,
+    int device_src_id_x, int device_src_id_y, 
+    int device_dst_id_x, int device_dst_id_y) {
+
+    float* boundry_data = calloc(rows*cols, sizeof(float));
+    *device_data = boundry_data;
+    //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
+
+    int x_dim;
+    int y_dim; 
+
+    float* boundry_src_data;
+
+    if((device_src_id_x >= NUM_TILES_X) && 
+        (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_x < 0) && 
+        (region == TOP_RIGHT || region == RIGHT || region == BOTTOM_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_y >= NUM_TILES_Y) && 
+        (region == TOP_LEFT || region == TOP || region == TOP_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+    if((device_src_id_y < 0) && 
+        (region == BOTTOM_LEFT || region == BOTTOM || region == BOTTOM_RIGHT)){
+        fill_cpu(rows*cols, 0, *device_data, 1);
+        return;
+    }
+
+    if(current_layer_idx == (num_layers - 1)){
+        x_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_w;
+        y_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_h;
+        boundry_src_data = SHARED_EXP_DELTAS[device_src_id_y][device_src_id_x];
+    }
+    else{
+        x_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_w;
+        y_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_h;
+        boundry_src_data = SHARED_NETWORKS[device_src_id_y][device_src_id_x]->layers[current_layer_idx].delta;
+
+    }
+
+        // x_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_w;
+        // y_dim = SHARED_NETWORKS[device_dst_id_y][device_dst_id_x]->layers[current_layer_idx].out_h;
+        // boundry_src_data = SHARED_NETWORKS[device_src_id_y][device_src_id_x]->layers[current_layer_idx].delta;
+
+
+    switch(region) {
+        case TOP_LEFT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
+                }
+            }
+        break;
+
+        case BOTTOM_LEFT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j];
+                }
+            }
+        break;
+
+        case TOP_RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
+
+        case BOTTOM_RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
+
+        case TOP:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
+                }
+            }
+        break;
+
+        case LEFT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j];
+                }
+            }
+        break;
+
+        case BOTTOM:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[(i+y_dim-rows)*x_dim + j];
+                }
+            }
+        break;
+
+        case RIGHT:
+            for (int i = 0; i < rows; ++i)
+            {
+                for (int j = 0; j < cols; ++j)
+                {
+                    boundry_data[i*cols + j] = boundry_src_data[i*x_dim + j+x_dim-cols];
+                }
+            }
+        break;
+    }
+
+}
+
+static void setup_data_forward(network* net, device_ftp_args_v2* ftp_args, int current_layer_idx){
+
+    int NUM_TILES_X = ftp_args->NUM_TILES_X;
+    int NUM_TILES_Y = ftp_args->NUM_TILES_Y;
+
+    network*** SHARED_NETWORKS = ftp_args->SHARED_NETWORKS; 
+    float*** SHARED_INPUT_IMAGES = ftp_args->SHARED_INPUT_IMAGES;
+
+    int DEVICE_ID_X = ftp_args->DEVICE_ID_X;
+    int DEVICE_ID_Y = ftp_args->DEVICE_ID_Y;
+
+    int INPUT_WIDTH = ftp_args->INPUT_WIDTH;
+    int INPUT_HEIGHT = ftp_args->INPUT_HEIGHT;
+
+    float* image_input = ftp_args->image_input;
+
+    int filter_size = net->layers[current_layer_idx].size;
+    int stride = net->layers[current_layer_idx].stride;
+
+    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
+    
+    int boundry_frames = unit_boundry; //unit_boundry*num_layers; //No fusing for now
+
+    int tile_total_input_width = net->layers[current_layer_idx].w;
+    int tile_total_input_height = net->layers[current_layer_idx].h;
+
+    int tile_input_width = tile_total_input_width - (2*unit_boundry);
+    int tile_input_height = tile_total_input_height - (2*unit_boundry);
+
+    int tile_total_output_width = net->layers[current_layer_idx].out_w;
+    int tile_total_output_height = net->layers[current_layer_idx].out_h;
+
+    int conv_start_pos_x = (tile_total_output_width*DEVICE_ID_X)*stride;
+    int conv_start_pos_y = (tile_total_output_height*DEVICE_ID_Y)*stride;
+
+    int conv_end_pos_x = conv_start_pos_x + (tile_total_output_width-1)*stride + filter_size - 1;
+    int conv_end_pos_y = conv_start_pos_y + (tile_total_output_height-1)*stride + filter_size - 1;
+
+    int next_conv_start_pos_x = (tile_total_output_width*(DEVICE_ID_X+1))*stride;
+    int next_conv_start_pos_y = (tile_total_output_height*(DEVICE_ID_Y+1))*stride;
+
+    int prev_conv_end_pos_x = conv_start_pos_x - stride + filter_size - 1;
+    int prev_conv_end_pos_y = conv_start_pos_y - stride + filter_size - 1;
+
+    int tile_core_start_pos_x = DEVICE_ID_X*tile_input_width + boundry_frames;
+    int tile_core_start_pos_y = DEVICE_ID_Y*tile_input_height + boundry_frames;
+
+    int tile_core_end_pos_x = tile_core_start_pos_x + tile_input_width - 1;
+    int tile_core_end_pos_y = tile_core_start_pos_y + tile_input_height - 1;
+
+    int next_tile_core_start_pos_x = tile_core_start_pos_x + tile_input_width;
+    int next_tile_core_start_pos_y = tile_core_start_pos_y + tile_input_height;
+
+    int prev_tile_core_end_pos_x = tile_core_end_pos_x - tile_input_width;
+    int prev_tile_core_end_pos_y = tile_core_end_pos_y - tile_input_height;
+
+    int left_boundry_edges = (conv_start_pos_x < tile_core_start_pos_x) ? (tile_core_start_pos_x - conv_start_pos_x) : (conv_start_pos_x - tile_core_start_pos_x);
+    int right_boundry_edges = (conv_end_pos_x > tile_core_end_pos_x) ? (conv_end_pos_x - tile_core_end_pos_x) : (tile_core_end_pos_x - conv_end_pos_x);
+
+    int top_boundry_edges = (conv_start_pos_y < tile_core_start_pos_y) ? (tile_core_start_pos_y - conv_start_pos_y) : (conv_start_pos_y - tile_core_start_pos_y);
+    int bottom_boundry_edges = (conv_end_pos_y > tile_core_end_pos_y) ? (conv_end_pos_y - tile_core_end_pos_y) : (tile_core_end_pos_y - conv_end_pos_y);
+
+    int next_tile_left_boundry_edges = (next_conv_start_pos_x < next_tile_core_start_pos_x) ? (next_tile_core_start_pos_x - next_conv_start_pos_x) : (next_conv_start_pos_x - next_tile_core_start_pos_x);
+    int prev_tile_right_boundry_edges = (prev_conv_end_pos_x > prev_tile_core_end_pos_x) ? (prev_conv_end_pos_x - prev_tile_core_end_pos_x) : (prev_tile_core_end_pos_x - prev_conv_end_pos_x);
+
+    int next_tile_top_boundry_edges = (next_conv_start_pos_y < next_tile_core_start_pos_y) ? (next_tile_core_start_pos_y - next_conv_start_pos_y) : (next_conv_start_pos_y - next_tile_core_start_pos_y);
+    int prev_tile_bottom_boundry_edges = (prev_conv_end_pos_y > prev_tile_core_end_pos_y) ? (prev_conv_end_pos_y - prev_tile_core_end_pos_y) : (prev_tile_core_end_pos_y - prev_conv_end_pos_y);
+
+
+    if(current_layer_idx == 0){
+
+        net->input = calloc(tile_total_input_width*tile_total_input_height, sizeof(float));
+        fill_cpu(tile_total_input_width*tile_total_input_height, 1, net->input, 1);
+
+        // for (int i = 0; i < tile_total_input_height; ++i)
+        // {
+        //     for (int j = 0; j < tile_total_input_width; ++j)
+        //     {
+        //         net->input[(i)*tile_total_input_width + (j)] = 1.0;//image_input[(i*tile_input_width) + j];
+        //     }
+        // }           
+    }
+
+    else{
+
+        free(net->input);
+        net->input = calloc(tile_total_input_width*tile_total_input_height, sizeof(float));
+        fill_cpu(tile_total_input_width*tile_total_input_height, 0, net->input, 1);
+
+        int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
+        int core_img_read_start_offset_y = (top_boundry_edges >= 0) ? 0 : (-1*top_boundry_edges);
+        int core_img_write_start_offset_x = (left_boundry_edges >= 0) ? left_boundry_edges : 0;
+        int core_img_write_start_offset_y = (top_boundry_edges >= 0) ? top_boundry_edges : 0;
+        int num_core_img_elements_x = 0;
+        int num_core_img_elements_y = 0;
+
+        if(left_boundry_edges >= 0){
+            if((tile_total_input_width - left_boundry_edges) >= tile_input_width){
+                num_core_img_elements_x = tile_input_width;
+            }
+            else{
+                num_core_img_elements_x = tile_total_input_width - left_boundry_edges;
+            }
+        }
+        else{
+            num_core_img_elements_x = tile_input_width + left_boundry_edges;
+        }
+
+        if(top_boundry_edges >= 0){
+            if((tile_total_input_height - top_boundry_edges) >= tile_input_height){
+                num_core_img_elements_y = tile_input_height;
+            }
+            else{
+                num_core_img_elements_y = tile_total_input_height - top_boundry_edges;
+            }
+        }
+        else{
+            num_core_img_elements_y = tile_input_height + top_boundry_edges;
+        }
+
+        //Core tile image
+        for (int i = 0; i < num_core_img_elements_y; ++i)
         {
-            printf("%.4f ", SHARED_WEIGHT_UPDATES [0][3][i*3 + j]);
+            for (int j = 0; j < num_core_img_elements_x; ++j)
+            {
+                net->input[(i+core_img_write_start_offset_y)*tile_total_input_width + (j+core_img_write_start_offset_x)] = net->layers[current_layer_idx-1].output[((i+core_img_read_start_offset_y)*tile_input_width) + (j+core_img_read_start_offset_x)];
+            }
+        }
+
+        //Top
+        if(top_boundry_edges > 0){
+            //receive top edges
+            float* boundry_top;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_top, 
+                top_boundry_edges, tile_input_width, BOTTOM, 
+                DEVICE_ID_X, DEVICE_ID_Y-1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
+            for (int i = 0; i < top_boundry_edges; ++i)
+            {
+                for (int j = 0; j < tile_input_width; ++j)
+                {
+
+                    net->input[(i*tile_total_input_width) + (j+left_write_offset)] = boundry_top[(i*tile_input_width) + j];
+                }
+            }
+            free(boundry_top);
+        } 
+
+        //Left
+        if(left_boundry_edges > 0){
+            //receive left edges
+
+            float* boundry_left;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_left, 
+                tile_input_height, left_boundry_edges, RIGHT, 
+                DEVICE_ID_X-1, DEVICE_ID_Y,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int top_write_offset = (top_boundry_edges >= 0) ? top_boundry_edges : 0;
+            for (int i = 0; i < tile_input_height; ++i)
+            {
+                for (int j = 0; j < left_boundry_edges; ++j)
+                {
+                    net->input[(i+top_write_offset)*tile_total_input_width + j] = boundry_left[(i*left_boundry_edges) + j];
+                }
+            }
+            free(boundry_left);
+        } 
+        // //Bottom 
+        if(bottom_boundry_edges > 0){
+            //receive bottom edges
+            float* boundry_bottom;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_bottom, 
+                bottom_boundry_edges, tile_input_width, TOP, 
+                DEVICE_ID_X, DEVICE_ID_Y+1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height) : tile_input_height;
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
+            for (int i = 0; i < bottom_boundry_edges; ++i)
+            {
+                for (int j = 0; j < tile_input_width; ++j)
+                {
+                    net->input[(i+bottom_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom[(i*tile_input_width) + j];
+                }
+            }
+            free(boundry_bottom);
         }   
-        printf("\n");
+        // //Right
+        if(right_boundry_edges > 0){
+            //receive right edges
+            float* boundry_right;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_right, 
+                tile_input_height, right_boundry_edges, LEFT, 
+                DEVICE_ID_X+1, DEVICE_ID_Y,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width) : tile_input_width;
+            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges) : 0;
+            for (int i = 0; i < tile_input_height; ++i)
+            {
+                for (int j = 0; j < right_boundry_edges; ++j)
+                {
+                    net->input[(i+top_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_right[(i*right_boundry_edges) + j];
+                }
+            }
+            free(boundry_right);
+        } 
+        // //Top left
+        if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+            float* boundry_top_left;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_top_left, 
+                top_boundry_edges, left_boundry_edges, BOTTOM_RIGHT, 
+                DEVICE_ID_X-1, DEVICE_ID_Y-1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            for (int i = 0; i < top_boundry_edges; ++i)
+            {
+                for (int j = 0; j < left_boundry_edges; ++j)
+                {
+                    net->input[(i*tile_total_input_width) + j] = boundry_top_left[(i*left_boundry_edges) + j];
+                }
+            }
+            free(boundry_top_left);
+        }
+
+        // //Top right
+        if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
+            float* boundry_top_right;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_top_right, 
+                top_boundry_edges, right_boundry_edges, BOTTOM_LEFT, 
+                DEVICE_ID_X+1, DEVICE_ID_Y-1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width) : tile_input_width;
+            for (int i = 0; i < top_boundry_edges; ++i)
+            {
+                for (int j = 0; j < right_boundry_edges; ++j)
+                {
+                    net->input[(i*tile_total_input_width) + (j+left_write_offset)] = boundry_top_right[(i*right_boundry_edges) + j];
+                }
+            }
+            free(boundry_top_right);
+        }
+
+        // //Bottom left
+        if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
+            float* boundry_bottom_left;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_bottom_left, 
+                bottom_boundry_edges, left_boundry_edges, TOP_RIGHT, 
+                DEVICE_ID_X-1, DEVICE_ID_Y+1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height) : tile_input_height;
+            for (int i = 0; i < bottom_boundry_edges; ++i)
+            {
+                for (int j = 0; j < left_boundry_edges; ++j)
+                {
+                    net->input[(i+top_write_offset)*(tile_total_input_width) + j] = boundry_bottom_left[(i*left_boundry_edges) + j];
+                }
+            }
+            free(boundry_bottom_left);
+        }
+
+        // //Bottom right
+        if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
+            float* boundry_bottom_right;
+            get_boundry_data_forward(SHARED_NETWORKS, SHARED_INPUT_IMAGES,
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_bottom_right, 
+                bottom_boundry_edges, right_boundry_edges, TOP_LEFT, 
+                DEVICE_ID_X+1, DEVICE_ID_Y+1,
+                DEVICE_ID_X, DEVICE_ID_Y);
+
+            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height) : tile_input_height;
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width) : tile_input_width;
+            for (int i = 0; i < bottom_boundry_edges; ++i)
+            {
+                for (int j = 0; j < right_boundry_edges; ++j)
+                {
+                    net->input[(i+top_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom_right[(i*right_boundry_edges) + j];
+                }
+            }
+            free(boundry_bottom_right);
+        }
+
+    }
+}
+
+
+
+
+
+
+static void setup_data_backward(network* net, device_ftp_args_v2* ftp_args, int current_layer_idx){
+
+    int NUM_TILES_X = ftp_args->NUM_TILES_X;
+    int NUM_TILES_Y = ftp_args->NUM_TILES_Y;
+
+    network*** SHARED_NETWORKS = ftp_args->SHARED_NETWORKS; 
+    float*** SHARED_EXP_DELTA = ftp_args->SHARED_EXP_DELTA;
+
+    int num_layers = ftp_args->num_layers;
+
+    int DEVICE_ID_X = ftp_args->DEVICE_ID_X;
+    int DEVICE_ID_Y = ftp_args->DEVICE_ID_Y;
+
+    int OUPUT_WIDTH = net->layers[net->n - 1].out_w;
+    int OUPUT_HEIGHT = net->layers[net->n - 1].out_h;
+
+    float* image_input = ftp_args->image_input;
+
+    int filter_size = net->layers[current_layer_idx].size;
+    int stride = net->layers[current_layer_idx].stride;
+
+    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
+    
+    int boundry_frames = unit_boundry; //unit_boundry*num_layers; //No fusing for now
+
+    //dimensions of required delta propagating backward
+    int tile_delta_out_width = net->layers[current_layer_idx-1].out_w;
+    int tile_delta_out_height = net->layers[current_layer_idx-1].out_h;
+
+    int tile_total_input_width = net->layers[current_layer_idx].w;
+    int tile_total_input_height = net->layers[current_layer_idx].h;
+
+    int tile_input_width = tile_total_input_width - (2*unit_boundry);
+    int tile_input_height = tile_total_input_height - (2*unit_boundry);
+
+    //dimensions of delta coming in from next layer
+    int tile_delta_in_width = net->layers[current_layer_idx].out_w;
+    int tile_delta_in_height = net->layers[current_layer_idx].out_h;
+
+    int dilated_tile_delta_in_width = tile_delta_in_width + (tile_delta_in_width)*stride;
+    int dilated_tile_delta_in_height = tile_delta_in_height + (tile_delta_in_height)*stride;
+
+    //computes how much actual data to get from neighboring edges. can be optimized in strided case
+    //to avoid 0s communication
+    int left_boundry_edges = (stride > 1 && boundry_frames > 0) ? (boundry_frames/(stride)) : boundry_frames;
+    int top_boundry_edges = left_boundry_edges;
+
+    int right_boundry_edges = (stride > 1 && boundry_frames > 0) ? ((boundry_frames+1)/(stride)) : boundry_frames;
+    int bottom_boundry_edges = right_boundry_edges;
+
+    int tile_total_delta_in_width = tile_delta_in_width + left_boundry_edges + right_boundry_edges;
+    int tile_total_delta_in_height = tile_delta_in_height + bottom_boundry_edges + top_boundry_edges;
+
+    net->input = net->layers[current_layer_idx - 1].output;
+    net->delta = net->layers[current_layer_idx - 1].delta;
+
+    //Core tile delta
+    for (int i = 0; i < (tile_delta_in_height); ++i)
+    {
+        for (int j = 0; j < (tile_delta_in_width); ++j)
+        {
+            net->layers[current_layer_idx].delta_with_boundry[(i+top_boundry_edges)*tile_total_delta_in_width + j+left_boundry_edges] = net->layers[current_layer_idx].delta[(i)*tile_delta_in_width + (j)];
+        }
     }
 
-//### DEBUG
-    // for (int i = 0; i < im_height; ++i)
-    // {
-    //     for (int j = 0; j < im_width; ++j)
+    //Boundry Delta
+    //Top
+    if(top_boundry_edges > 0){
+        //receive top edges
+        float* boundry_top;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_top, 
+            top_boundry_edges, tile_delta_in_width, BOTTOM, 
+            DEVICE_ID_X, DEVICE_ID_Y-1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int left_write_offset = left_boundry_edges;
+        for (int i = 0; i < top_boundry_edges; ++i)
+        {
+            for (int j = 0; j < tile_delta_in_width; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i*tile_total_delta_in_width) + (j+left_boundry_edges)] = boundry_top[(i*tile_delta_in_width) + j];
+            }
+        }
+
+        free(boundry_top);
+    } 
+
+    //Left
+    if(left_boundry_edges > 0){
+        //receive left edges
+
+        float* boundry_left;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_left, 
+            tile_delta_in_height, left_boundry_edges, RIGHT, 
+            DEVICE_ID_X-1, DEVICE_ID_Y,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int top_write_offset = top_boundry_edges;
+        for (int i = 0; i < tile_delta_in_height; ++i)
+        {
+            for (int j = 0; j < left_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i+top_write_offset)*tile_total_delta_in_width + j] = boundry_left[(i*left_boundry_edges) + j];
+            }
+        }
+        free(boundry_left);
+    } 
+        // //Bottom 
+    if(bottom_boundry_edges > 0){
+        //receive bottom edges
+        float* boundry_bottom;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_bottom, 
+            bottom_boundry_edges, tile_delta_in_width, TOP, 
+            DEVICE_ID_X, DEVICE_ID_Y+1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
+        int left_write_offset = left_boundry_edges;
+
+        for (int i = 0; i < bottom_boundry_edges; ++i)
+        {
+            for (int j = 0; j < tile_delta_in_width; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i+bottom_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom[(i*tile_delta_in_width) + j];
+            }
+        }
+        free(boundry_bottom);
+    }   
+        // //Right
+    if(right_boundry_edges > 0){
+        //receive right edges
+        float* boundry_right;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_right, 
+            tile_delta_in_height, right_boundry_edges, LEFT, 
+            DEVICE_ID_X+1, DEVICE_ID_Y,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int left_write_offset = left_boundry_edges + tile_delta_in_width;
+        int top_write_offset = top_boundry_edges;
+        for (int i = 0; i < tile_delta_in_height; ++i)
+        {
+            for (int j = 0; j < right_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_right[(i*right_boundry_edges) + j];
+            }
+        }
+        free(boundry_right);
+    } 
+    // //Top left
+    if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+        float* boundry_top_left;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_top_left, 
+            top_boundry_edges, left_boundry_edges, BOTTOM_RIGHT, 
+            DEVICE_ID_X-1, DEVICE_ID_Y-1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        for (int i = 0; i < top_boundry_edges; ++i)
+        {
+            for (int j = 0; j < left_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i*tile_total_delta_in_width) + j] = boundry_top_left[(i*left_boundry_edges) + j];
+            }
+        }
+        free(boundry_top_left);
+    }
+
+    // //Top right
+    if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
+        float* boundry_top_right;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_top_right, 
+            top_boundry_edges, right_boundry_edges, BOTTOM_LEFT, 
+            DEVICE_ID_X+1, DEVICE_ID_Y-1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int left_write_offset = (left_boundry_edges + tile_delta_in_width);
+        for (int i = 0; i < top_boundry_edges; ++i)
+        {
+            for (int j = 0; j < right_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i*tile_total_delta_in_width) + (j+left_write_offset)] = boundry_top_right[(i*right_boundry_edges) + j];
+            }
+        }
+        free(boundry_top_right);
+    }
+
+    // //Bottom left
+    if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
+        float* boundry_bottom_left;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_bottom_left, 
+            bottom_boundry_edges, left_boundry_edges, TOP_RIGHT, 
+            DEVICE_ID_X-1, DEVICE_ID_Y+1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int top_write_offset = top_boundry_edges + tile_delta_in_height;
+        for (int i = 0; i < bottom_boundry_edges; ++i)
+        {
+            for (int j = 0; j < left_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i+top_write_offset)*(tile_total_delta_in_width) + j] = boundry_bottom_left[(i*left_boundry_edges) + j];
+            }
+        }
+        free(boundry_bottom_left);
+    }
+
+    // //Bottom right
+    if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
+        float* boundry_bottom_right;
+        get_boundry_data_backward(SHARED_NETWORKS, SHARED_EXP_DELTA,
+            NUM_TILES_X, NUM_TILES_Y,
+            current_layer_idx, num_layers,
+            &boundry_bottom_right, 
+            bottom_boundry_edges, right_boundry_edges, TOP_LEFT, 
+            DEVICE_ID_X+1, DEVICE_ID_Y+1,
+            DEVICE_ID_X, DEVICE_ID_Y);
+
+        int top_write_offset = top_boundry_edges + tile_delta_in_height;
+        int left_write_offset = left_boundry_edges + tile_delta_in_width;
+        for (int i = 0; i < bottom_boundry_edges; ++i)
+        {
+            for (int j = 0; j < right_boundry_edges; ++j)
+            {
+                net->layers[current_layer_idx].delta_with_boundry[(i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom_right[(i*right_boundry_edges) + j];
+            }
+        }
+        free(boundry_bottom_right);
+    }
+
+
+    int save_h = net->layers[current_layer_idx].h;
+    int save_w = net->layers[current_layer_idx].w;
+
+    int save_out_h = net->layers[current_layer_idx].out_h;
+    int save_out_w = net->layers[current_layer_idx].out_w;
+
+    int save_pad = net->layers[current_layer_idx].pad;
+
+    //TODO Take care of this in col2im itself and avoid this confusing implementation
+    int extra_zero_padded_edges = boundry_frames - (left_boundry_edges*stride); //accounts for the top left extra edge.
+
+    net->layers[current_layer_idx].out_h = tile_delta_in_height + top_boundry_edges + bottom_boundry_edges;
+    net->layers[current_layer_idx].out_w = tile_delta_in_width + left_boundry_edges + right_boundry_edges;
+
+    int dilated_outh = net->layers[current_layer_idx].out_h + (stride-1)*(net->layers[current_layer_idx].out_h);
+    int dilated_outw = net->layers[current_layer_idx].out_w + (stride-1)*(net->layers[current_layer_idx].out_w);
+    net->layers[current_layer_idx].h = dilated_outh - filter_size + 1;
+    net->layers[current_layer_idx].w = dilated_outw - filter_size + 1;
+
+    //TODO: Make this generic across 2 D. now assumes both w and h are equal
+    int base_pad = (dilated_outh - net->layers[current_layer_idx].h);
+
+    net->layers[current_layer_idx].pad = base_pad-extra_zero_padded_edges;
+
+    printf("%d %d %d %d\n", top_boundry_edges, left_boundry_edges, bottom_boundry_edges, right_boundry_edges);
+    // printf("DIN_H %d DIN_W %d TOTDIN_H %d TOTDIN_W%d\n", tile_delta_in_height, tile_delta_in_width, tile_total_delta_in_height, tile_total_delta_in_height);
+    // printf("DOUT_H %d DOUT_W %d\n", tile_delta_out_height, tile_delta_out_width);
+    printf("%d %d %d\n", dilated_outh, dilated_outw, extra_zero_padded_edges);
+    printf("%d %d %d %d\n", net->layers[current_layer_idx].out_h, net->layers[current_layer_idx].out_w, net->layers[current_layer_idx].h, net->layers[current_layer_idx].w);
+
+    if(current_layer_idx == 3 && (DEVICE_ID_X == 1) && (DEVICE_ID_Y == 0)){
+        for (int i = 0; i < net->layers[current_layer_idx].out_h; ++i)
+        {
+            for (int j = 0; j < net->layers[current_layer_idx].out_w; ++j)
+            {
+                printf("%.2f ", net->layers[current_layer_idx].delta_with_boundry[i*(net->layers[current_layer_idx].out_w) + j]);
+            }
+            printf("\n");
+        }
+        //while(1);
+    }
+
+    backward_convolutional_layer_dist_v2(net->layers[current_layer_idx], *net);
+
+    // if(current_layer_idx == 3 && (DEVICE_ID_X == 1) && (DEVICE_ID_Y == 0)){
+    //     for (int i = 0; i < net->layers[current_layer_idx].h; ++i)
     //     {
-    //         printf("%.2f ", net->layers[0].delta_with_boundry[(i*im_width) + j]);
+    //         for (int j = 0; j < net->layers[current_layer_idx].w; ++j)
+    //         {
+    //             printf("%.2f ", net->layers[current_layer_idx-1].delta[i*(net->layers[current_layer_idx].w) + j]);
+    //         }
+    //         printf("\n");
+    //     }
+    //     while(1);
+    // }
+
+    int extra_cols = net->layers[current_layer_idx].w - tile_input_width;
+    int extra_rows = net->layers[current_layer_idx].h - tile_input_height;
+
+    printf("Extras: %d %d\n", extra_rows, extra_cols);
+
+    int left_realignment_edges_receive = (DEVICE_ID_X == 0) ? 0 : (DEVICE_ID_X*extra_cols);
+    int top_realignment_edges_receive = (DEVICE_ID_Y == 0) ? 0 : (DEVICE_ID_Y*extra_rows);
+
+    int bottom_realignment_edges_transmit = (DEVICE_ID_Y == NUM_TILES_Y - 1) ? 0 : ((DEVICE_ID_Y + 1)*extra_rows);
+    int right_realignment_edges_transmit = (DEVICE_ID_X == NUM_TILES_X - 1) ? 0 : ((DEVICE_ID_X + 1)*extra_cols);   
+
+
+
+    //For this single thread test purpose since the tiles are executes top left to left/bottom.
+    //the tiles from which some tile is getting boundry data will already be done with back pass
+    //In real implementation with actual communication, need some wait synchronization
+    // float * delta_ftp_top_receive;
+    // float * delta_ftp_left_receive;
+    // float * delta_ftp_top_left_receive;
+    // float * delta_ftp_bottom_transmit;
+    // float * delta_ftp_bottom_right_transmit;
+    // float * delta_ftp_right_transmit;
+
+    if(right_realignment_edges_transmit > 0){
+        //receive top edges
+
+        int left_write_offset = net->layers[current_layer_idx].w - extra_cols;
+        for (int i = 0; i < (net->layers[current_layer_idx].h - extra_rows); i++)
+        {
+            for (int j = left_write_offset; j < left_write_offset+extra_cols; ++j)
+            {
+                net->layers[current_layer_idx-1].delta_ftp_right_transmit[i*extra_cols + (j - left_write_offset)] =
+                     net->layers[current_layer_idx-1].delta[i*net->layers[current_layer_idx].w + j];
+            }
+        }
+    }
+    if(bottom_realignment_edges_transmit > 0){
+        //receive top edges
+
+        int top_write_offset = net->layers[current_layer_idx].h - extra_rows;
+        for (int i = top_write_offset; i < top_write_offset+extra_rows; ++i)
+        {
+            for (int j = 0; j < (net->layers[current_layer_idx].w - extra_cols); j++)
+            {
+                net->layers[current_layer_idx-1].delta_ftp_bottom_transmit[(i-top_write_offset)*(net->layers[current_layer_idx].w - extra_cols) + j] =
+                     net->layers[current_layer_idx-1].delta[i*net->layers[current_layer_idx].w + j];
+            }
+        }
+    }
+
+
+    if(bottom_realignment_edges_transmit > 0 && right_realignment_edges_transmit > 0){
+        //receive top edges
+        int left_write_offset = net->layers[current_layer_idx].w - extra_cols;
+        int top_write_offset = net->layers[current_layer_idx].h - extra_rows;
+        for (int i = top_write_offset; i < top_write_offset+extra_rows; ++i)
+        {
+            for (int j = left_write_offset; j < left_write_offset+extra_cols; ++j)
+            {
+                net->layers[current_layer_idx-1].delta_ftp_bottom_right_transmit[(i-top_write_offset)*(extra_cols) + j - left_write_offset] =
+                     net->layers[current_layer_idx-1].delta[i*net->layers[current_layer_idx].w + j];
+            }
+        }
+    } 
+
+    net->layers[current_layer_idx].pad = save_pad;
+
+    net->layers[current_layer_idx].h = save_h;
+    net->layers[current_layer_idx].w = save_w;
+
+    net->layers[current_layer_idx].out_h = save_out_h;
+    net->layers[current_layer_idx].out_w = save_out_w;
+
+
+    float * temp = calloc(net->layers[current_layer_idx-1].outputs*10, sizeof(float));
+    //Left
+    if(left_realignment_edges_receive > 0){
+        //receive left edges
+        for(int i=0; i < net->layers[current_layer_idx].h; i++)
+            for (int j = 0; j < left_realignment_edges_receive; ++j)
+            {
+                temp[((i+top_realignment_edges_receive)*net->layers[current_layer_idx].w) + j] = 
+                    ftp_args->SHARED_NETWORKS[DEVICE_ID_Y][DEVICE_ID_X-1]->layers[current_layer_idx-1].
+                        delta_ftp_right_transmit[i*left_realignment_edges_receive + j];
+            }
+    }
+
+    if(top_realignment_edges_receive > 0){
+        //receive left edges
+        for(int i = 0; i < top_realignment_edges_receive; ++i)
+            for (int j=0; j < net->layers[current_layer_idx].w; j++)
+            {
+                temp[(i*net->layers[current_layer_idx].w) + j + left_realignment_edges_receive] = 
+                    ftp_args->SHARED_NETWORKS[DEVICE_ID_Y-1][DEVICE_ID_X]->layers[current_layer_idx-1].
+                        delta_ftp_bottom_transmit[i*(net->layers[current_layer_idx].w) + j];
+            }
+    }
+
+    // //Top left
+    if((top_realignment_edges_receive > 0) && (left_realignment_edges_receive > 0)){
+
+        for (int i = 0; i < top_realignment_edges_receive; ++i)
+        {
+            for (int j = 0; j < left_realignment_edges_receive; ++j)
+            {
+                temp[(i*left_realignment_edges_receive) + j] = 
+                    ftp_args->SHARED_NETWORKS[DEVICE_ID_Y-1][DEVICE_ID_X-1]->layers[current_layer_idx-1].
+                        delta_ftp_bottom_right_transmit[i*(left_realignment_edges_receive) + j];
+            }
+        }
+    }
+    int elongated_h = dilated_outh - filter_size + 1;
+    int elongated_w = dilated_outw - filter_size + 1;
+
+    for (int i = 0; i < (net->layers[current_layer_idx].h - top_realignment_edges_receive); ++i)
+    {
+        for (int j = 0; j < (net->layers[current_layer_idx].w - left_realignment_edges_receive); ++j)
+        {
+                temp[((i+top_realignment_edges_receive)*net->layers[current_layer_idx].w) + j + left_realignment_edges_receive] = 
+                    net->layers[current_layer_idx-1].
+                        delta[i*(elongated_h) + j];
+        }
+    }
+
+    // for (int i = 0; i < (net->layers[current_layer_idx].h); ++i)
+    // {
+    //     for (int j = 0; j < (net->layers[current_layer_idx].w); ++j)
+    //     {
+    //             printf("%.2f ", temp[i*net->layers[current_layer_idx].w + j]);
     //     }
     //     printf("\n");
     // }
-    // printf("\n");
+    // while(1);
 
-//###END DEBUG
+    //TODO: realign data
+    // free(net->layers[current_layer_idx-1].delta);
+    // net->layers[current_layer_idx-1].delta = temp;
+    
+}
 
 
+
+
+
+
+void execute_dev_v2_forward(void* ptr, int current_layer_idx){
+
+    printf("Thread started exec_device\n\n");
+    //while(1);
+
+    device_ftp_args_v2* ftp_args = (device_ftp_args_v2*) ptr;
+
+    int DEVICE_ID_Y = ftp_args->DEVICE_ID_Y;
+    int DEVICE_ID_X = ftp_args->DEVICE_ID_X;    
+
+    network *net = ftp_args->SHARED_NETWORKS[DEVICE_ID_Y][DEVICE_ID_X];
+    net->index = current_layer_idx;
+    
+    setup_data_forward(net, ftp_args, current_layer_idx);
+
+}
+
+void execute_dev_v2_backward(void* ptr, int current_layer_idx){
+
+    printf("Thread started exec_device\n\n");
+    //while(1);
+
+    device_ftp_args_v2* ftp_args = (device_ftp_args_v2*) ptr;
+
+    int DEVICE_ID_Y = ftp_args->DEVICE_ID_Y;
+    int DEVICE_ID_X = ftp_args->DEVICE_ID_X;    
+
+    network *net = ftp_args->SHARED_NETWORKS[DEVICE_ID_Y][DEVICE_ID_X];
+    net->index = current_layer_idx;
+
+    if(current_layer_idx == (ftp_args->num_layers - 1)){
+        int ydim = net->layers[current_layer_idx].out_h;
+        int xdim = net->layers[current_layer_idx].out_w;
+        for (int i = 0; i < ydim; ++i)
+        {
+            for (int j = 0; j < xdim; ++j)
+            {
+                net->layers[current_layer_idx].delta[i*xdim + j] = ftp_args->SHARED_EXP_DELTA[DEVICE_ID_Y][DEVICE_ID_X][i*xdim + j];
+            }
+        }
+    }
+    
+    setup_data_backward(net, ftp_args, current_layer_idx);
 }

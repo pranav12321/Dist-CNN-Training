@@ -240,6 +240,13 @@ struct layer{
 
     float * delta;
     float * delta_with_boundry;
+    
+    float * delta_ftp_top_receive;
+    float * delta_ftp_left_receive;
+    float * delta_ftp_top_left_receive;
+    float * delta_ftp_bottom_transmit;
+    float * delta_ftp_bottom_right_transmit;
+    float * delta_ftp_right_transmit;
     float * output;
     float * loss;
     float * squared;
