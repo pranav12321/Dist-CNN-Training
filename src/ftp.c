@@ -8,17 +8,6 @@
 extern sem_t filter_diverge;
 extern sem_t filter_converge;
 
-typedef enum orientation{
-    TOP,
-    LEFT,
-    BOTTOM,
-    RIGHT,
-    TOP_LEFT,
-    BOTTOM_LEFT,
-    BOTTOM_RIGHT,
-    TOP_RIGHT,
-} orientation;
-
 void get_boundry_data_forward(network*** SHARED_NETWORKS, float***SHARED_INPUT_IMAGES,
     int NUM_TILES_X, int NUM_TILES_Y,
     int current_layer_idx, 
@@ -1053,8 +1042,8 @@ static void setup_data_backward(network* net, device_ftp_args_v2* ftp_args, int 
     // while(1);
 
     //TODO: realign data
-    // free(net->layers[current_layer_idx-1].delta);
-    // net->layers[current_layer_idx-1].delta = temp;
+    free(net->layers[current_layer_idx-1].delta);
+    net->layers[current_layer_idx-1].delta = temp;
     
 }
 

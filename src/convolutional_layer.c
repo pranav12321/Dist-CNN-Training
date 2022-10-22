@@ -219,8 +219,10 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.inputs = l.w * l.h * l.c;
 
     l.output = calloc(l.batch*l.outputs*10, sizeof(float));
+    l.output_without_boundry = calloc(l.batch*l.outputs*10, sizeof(float));
     l.delta  = calloc(l.batch*l.outputs*10, sizeof(float));
     l.delta_with_boundry  = calloc(l.batch*l.outputs*10, sizeof(float)); //TODO: Calculate this exact size
+    l.delta_without_boundry  = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_top_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_left_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_top_left_receive  = calloc(l.batch*l.outputs*10, sizeof(float));
@@ -614,16 +616,14 @@ void backward_convolutional_layer_dist(convolutional_layer l, network net)
     }
 }
 
-
-
-void backward_convolutional_layer_dist_v2(convolutional_layer l, network net)
+void backward_convolutional_layer_dist_filters(convolutional_layer l, network net)
 {
     int i, j;
     int m = l.n/l.groups;
     int n = l.size*l.size*l.c/l.groups;
     int k = l.out_w*l.out_h;
 
-    gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
+    //gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
 
     if(l.batch_normalize){
         backward_batchnorm_layer(l, net);
@@ -633,7 +633,7 @@ void backward_convolutional_layer_dist_v2(convolutional_layer l, network net)
 
     for(i = 0; i < l.batch; ++i){
         for(j = 0; j < l.groups; ++j){
-            float *a = l.delta + (i*l.groups + j)*m*k;
+            float *a = l.delta_without_boundry + (i*l.groups + j)*m*k;
             float *b = net.workspace;
             float *c = l.weight_updates + j*l.nweights/l.groups;
 
@@ -643,11 +643,30 @@ void backward_convolutional_layer_dist_v2(convolutional_layer l, network net)
             if(l.size == 1){
                 b = im;
             } else {
-                // im2col_cpu(im, l.c/l.groups, l.h, l.w, 
-                //         l.size, l.stride, l.pad, b);
+                im2col_cpu_ftp_version(im, l.c/l.groups, l.h, l.w, l.out_h, l.out_w, 
+                         l.size, l.stride, l.pad, b);
             }
 
-            //gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
+            gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
+        }
+    }
+}
+
+void backward_convolutional_layer_dist_delta(convolutional_layer l, network net){
+
+    int i, j;
+    int m = l.n/l.groups;
+    int n = l.size*l.size*l.c/l.groups;
+    int k = l.out_w*l.out_h;
+
+    for(i = 0; i < l.batch; ++i){
+        for(j = 0; j < l.groups; ++j){
+            float *a = l.delta_without_boundry + (i*l.groups + j)*m*k;
+            float *b = net.workspace;
+            float *c = l.weight_updates + j*l.nweights/l.groups;
+
+            float *im  = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+            float *imd = net.delta + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
 
             if (net.delta) {
                 a = l.weights + j*l.nweights/l.groups;
@@ -657,21 +676,65 @@ void backward_convolutional_layer_dist_v2(convolutional_layer l, network net)
                     c = imd;
                 }
 
-                printf("%d %d %d %d %d %d\n", n, k, l.h, l.w, l.out_h, l.out_w);
+                //printf("%d %d %d %d %d %d\n", n, k, l.h, l.w, l.out_h, l.out_w);
                 gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
 
                 if (l.size != 1) {
                     col2im_cpu_ftp_version(net.workspace, l.c/l.groups, l.h, l.w, l.out_h, l.out_w, l.size, l.stride, l.pad, imd);
                 }
             }
-            // for (int i = 0; i < 15; ++i)
-            // {
-            //     for (int j = 0; j < 15; ++j)
-            //     {
-            //         printf("%.2f ", net.delta[i*15 + j]);
-            //     }
-            //     printf("\n");
-            // }
+        }
+    }
+}
+
+void backward_convolutional_layer_dist_v2(convolutional_layer l, network net)
+{
+    int i, j;
+    int m = l.n/l.groups;
+    int n = l.size*l.size*l.c/l.groups;
+    int k = l.out_w*l.out_h;
+
+    //gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
+
+    if(l.batch_normalize){
+        backward_batchnorm_layer(l, net);
+    } else {
+        backward_bias(l.bias_updates, l.delta, l.batch, l.n, k);
+    }
+
+    for(i = 0; i < l.batch; ++i){
+        for(j = 0; j < l.groups; ++j){
+            float *a = l.delta_without_boundry + (i*l.groups + j)*m*k;
+            float *b = net.workspace;
+            float *c = l.weight_updates + j*l.nweights/l.groups;
+
+            float *im  = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+            float *imd = net.delta + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+
+            if(l.size == 1){
+                b = im;
+            } else {
+                im2col_cpu_ftp_version(im, l.c/l.groups, l.h, l.w, l.out_h, l.out_w, 
+                         l.size, l.stride, l.pad, b);
+            }
+
+            gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
+
+            if (net.delta) {
+                a = l.weights + j*l.nweights/l.groups;
+                b = l.delta_with_boundry + (i*l.groups + j)*m*k;
+                c = net.workspace;
+                if (l.size == 1) {
+                    c = imd;
+                }
+
+                //printf("%d %d %d %d %d %d\n", n, k, l.h, l.w, l.out_h, l.out_w);
+                gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
+
+                if (l.size != 1) {
+                    col2im_cpu_ftp_version(net.workspace, l.c/l.groups, l.h, l.w, l.out_h, l.out_w, l.size, l.stride, l.pad, imd);
+                }
+            }
         }
     }
 }

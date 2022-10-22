@@ -1,3 +1,5 @@
+#ifndef FTP
+#define FTP
 #include "darknet.h"
 #include "convolutional_layer.h"
 
@@ -52,3 +54,35 @@ typedef struct device_ftp_args_v2{
     float** SHARED_DELTA_ALIGNMENT_BOTTOM_RIGHT;
 
 } device_ftp_args_v2;
+
+typedef enum orientation{
+    TOP,
+    LEFT,
+    BOTTOM,
+    RIGHT,
+    TOP_LEFT,
+    BOTTOM_LEFT,
+    BOTTOM_RIGHT,
+    TOP_RIGHT,
+} orientation;
+
+void get_boundry_data_forward(network*** SHARED_NETWORKS, float***SHARED_INPUT_IMAGES,
+    int NUM_TILES_X, int NUM_TILES_Y,
+    int current_layer_idx, 
+    float** device_data, 
+    int rows, int cols, orientation region,
+    int device_src_id_x, int device_src_id_y, 
+    int device_dst_id_x, int device_dst_id_y);
+
+void get_boundry_data_backward(network*** SHARED_NETWORKS, float*** SHARED_EXP_DELTAS,
+    int NUM_TILES_X, int NUM_TILES_Y,
+    int current_layer_idx, int num_layers,
+    float** device_data, 
+    int rows, int cols, orientation region,
+    int device_src_id_x, int device_src_id_y, 
+    int device_dst_id_x, int device_dst_id_y);
+
+#endif
+
+
+
