@@ -212,10 +212,10 @@ struct layer{
     int bottom_boundry_edges_delta;
     int right_boundry_edges_delta;
 
-    int left_boundry_edges_output;
-    int top_boundry_edges_output;
-    int bottom_boundry_edges_output;
-    int right_boundry_edges_output;
+    int left_boundry_edges_featuremap;
+    int top_boundry_edges_featuremap;
+    int bottom_boundry_edges_featuremap;
+    int right_boundry_edges_featuremap;
 
     int delta_in_w_with_boundry, delta_in_h_with_boundry;
     int delta_out_h_with_boundry, delta_out_w_with_boundry;
@@ -228,6 +228,12 @@ struct layer{
 
     int featuremap_start_coordinate_x, featuremap_end_coordinate_x;
     int featuremap_start_coordinate_y, featuremap_end_coordinate_y;
+
+    int featuremap_in_w_with_boundry, featuremap_in_h_with_boundry;
+    int featuremap_out_h_with_boundry, featuremap_out_w_with_boundry;
+
+    int featuremap_in_w_without_boundry, featuremap_in_h_without_boundry;
+    int featuremap_out_h_without_boundry, featuremap_out_w_without_boundry;
 
     char  * cweights;
     int   * indexes;

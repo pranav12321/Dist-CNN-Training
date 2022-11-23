@@ -29,34 +29,22 @@ void partition_forward(network* net,
     int end_x_coordinate = end_x_forward;
     int end_y_coordinate = end_y_forward;
 
-    net->layers[num_layers-1].left_boundry_edges_output = 0;
-    net->layers[num_layers-1].top_boundry_edges_output = 0;
-    net->layers[num_layers-1].right_boundry_edges_output = 0;
-    net->layers[num_layers-1].bottom_boundry_edges_output = 0;
+    // net->layers[num_layers-1].left_boundry_edges_featuremap = 0;
+    // net->layers[num_layers-1].top_boundry_edges_featuremap = 0;
+    // net->layers[num_layers-1].right_boundry_edges_featuremap = 0;
+    // net->layers[num_layers-1].bottom_boundry_edges_featuremap = 0;
 
-    net->layers[num_layers-1].delta_in_h_without_boundry = 3;//end_y_coordinate - start_y_coordinate + 1;
-    net->layers[num_layers-1].delta_in_w_without_boundry = 3;//end_x_coordinate - start_x_coordinate + 1;
+    // net->layers[num_layers-1].featuremap_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1; 
+    // net->layers[num_layers-1].featuremap_in_h_without_boundry = net->layers[num_layers-1].featuremap_in_h_with_boundry;
 
-    net->layers[2].delta_in_h_without_boundry = 3;//end_y_coordinate - start_y_coordinate + 1;
-    net->layers[2].delta_in_w_without_boundry = 3;//end_x_coordinate - start_x_coordinate + 1;
+    // net->layers[num_layers-1].featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
+    // net->layers[num_layers-1].featuremap_in_w_without_boundry = net->layers[num_layers-1].featuremap_in_w_with_boundry;
 
-    net->layers[1].delta_in_h_without_boundry = 6;//end_y_coordinate - start_y_coordinate + 1;
-    net->layers[1].delta_in_w_without_boundry = 6;//end_x_coordinate - start_x_coordinate + 1;
-
-    net->layers[0].delta_in_h_without_boundry = 6;//end_y_coordinate - start_y_coordinate + 1;
-    net->layers[0].delta_in_w_without_boundry = 6;//end_x_coordinate - start_x_coordinate + 1;
+    // printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[num_layers-1].featuremap_in_h_with_boundry, net->layers[num_layers-1].featuremap_in_h_without_boundry);
+    // printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[num_layers-1].featuremap_in_w_with_boundry, net->layers[num_layers-1].featuremap_in_w_without_boundry);
 
     for (int i = (num_layers-1); i >= 0; i--)
     {
-
-        printf("Top boundry edges = %d\n", top_boundry_edges);
-        printf("Left boundry edges = %d\n", left_boundry_edges);
-        printf("Right boundry edges = %d\n", right_boundry_edges);
-        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-        printf("Start x coordinate = %d\n", start_x_coordinate);
-        printf("Start y coordinte = %d\n", start_y_coordinate);
-        printf("End x coordinate = %d\n", end_x_coordinate);
-        printf("End y coordinate = %d\n\n", end_y_coordinate);
         // if(i == 2 && DEVICE_ID_X == 1 && DEVICE_ID_Y == 0){
         //     printf("%d\n", net->layers[3].left_boundry_edges_output);
         //     while(1);
@@ -68,16 +56,28 @@ void partition_forward(network* net,
         int dilated_delta_dim_x = net->layers[i].out_w*stride;
         int dilated_delta_dim_y = net->layers[i].out_h*stride;
 
-        left_boundry_edges += (unit_boundry*stride);
+        int next_layer_left_edges;// = net->layers[i+1].left_boundry_edges_featuremap;
+        int next_layer_right_edges;// = net->layers[i+1].right_boundry_edges_featuremap;
+
+        if(i == (num_layers-1)){
+            next_layer_left_edges = 0;
+            next_layer_right_edges = 0;
+        }
+        else{
+            next_layer_left_edges = net->layers[i+1].left_boundry_edges_featuremap;
+            next_layer_right_edges = net->layers[i+1].right_boundry_edges_featuremap;
+        }
+
+        left_boundry_edges = unit_boundry + (next_layer_left_edges*stride);
         top_boundry_edges = left_boundry_edges;
 
-        right_boundry_edges += (unit_boundry*stride);
+        right_boundry_edges = unit_boundry + (next_layer_right_edges*stride);;
         bottom_boundry_edges = right_boundry_edges;
 
-        net->layers[i].left_boundry_edges_output = left_boundry_edges;
-        net->layers[i].top_boundry_edges_output = top_boundry_edges;
-        net->layers[i].right_boundry_edges_output = right_boundry_edges;
-        net->layers[i].bottom_boundry_edges_output = bottom_boundry_edges;
+        net->layers[i].left_boundry_edges_featuremap = left_boundry_edges;
+        net->layers[i].top_boundry_edges_featuremap = top_boundry_edges;
+        net->layers[i].right_boundry_edges_featuremap = right_boundry_edges;
+        net->layers[i].bottom_boundry_edges_featuremap = bottom_boundry_edges;
 
 
         start_x_coordinate = (start_x_coordinate*stride) - unit_boundry;
@@ -86,24 +86,28 @@ void partition_forward(network* net,
         end_x_coordinate = (end_x_coordinate*stride) + unit_boundry + stride - 1;
         end_y_coordinate = (end_y_coordinate*stride) + unit_boundry + stride - 1;
 
-        net->layers[i].left_boundry_edges_output = net->layers[i].featuremap_start_coordinate_x - start_x_coordinate;
-        net->layers[i].top_boundry_edges_output = net->layers[i].featuremap_start_coordinate_y - start_y_coordinate;
-        net->layers[i].right_boundry_edges_output = end_x_coordinate - net->layers[i].featuremap_end_coordinate_x;
-        net->layers[i].bottom_boundry_edges_output = end_y_coordinate - net->layers[i].featuremap_end_coordinate_y;
+        net->layers[i].featuremap_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1; 
+        net->layers[i].featuremap_in_h_without_boundry = net->layers[i].featuremap_in_h_with_boundry - (net->layers[i].top_boundry_edges_featuremap + net->layers[i].bottom_boundry_edges_featuremap);
 
+        net->layers[i].featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
+        net->layers[i].featuremap_in_w_without_boundry = net->layers[i].featuremap_in_w_with_boundry - (net->layers[i].left_boundry_edges_featuremap + net->layers[i].right_boundry_edges_featuremap);
 
+        // net->layers[i].left_boundry_edges_output = net->layers[i].featuremap_start_coordinate_x - start_x_coordinate;
+        // net->layers[i].top_boundry_edges_output = net->layers[i].featuremap_start_coordinate_y - start_y_coordinate;
+        // net->layers[i].right_boundry_edges_output = end_x_coordinate - net->layers[i].featuremap_end_coordinate_x;
+        // net->layers[i].bottom_boundry_edges_output = end_y_coordinate - net->layers[i].featuremap_end_coordinate_y;
+        printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
+        printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
+
+        printf("Top boundry edges = %d\n", top_boundry_edges);
+        printf("Left boundry edges = %d\n", left_boundry_edges);
+        printf("Right boundry edges = %d\n", right_boundry_edges);
+        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+        printf("Start x coordinate = %d\n", start_x_coordinate);
+        printf("Start y coordinte = %d\n", start_y_coordinate);
+        printf("End x coordinate = %d\n", end_x_coordinate);
+        printf("End y coordinate = %d\n\n", end_y_coordinate);
     }
-    
-
-    printf("Top boundry edges = %d\n", top_boundry_edges);
-    printf("Left boundry edges = %d\n", left_boundry_edges);
-    printf("Right boundry edges = %d\n", right_boundry_edges);
-    printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-
-    printf("Start x coordinate = %d\n", start_x_coordinate);
-    printf("Start y coordinte = %d\n", start_y_coordinate);
-    printf("End x coordinate = %d\n", end_x_coordinate);
-    printf("End y coordinate = %d\n\n", end_y_coordinate);
 
     for (int i = start_y_coordinate; i <= end_y_coordinate; ++i)
     {
@@ -149,29 +153,25 @@ void partition_backward(network* net,
 
     int num_layers = net->n;
 
-    net->layers[0].left_boundry_edges_delta = 0;
-    net->layers[0].top_boundry_edges_delta = 0;
-    net->layers[0].right_boundry_edges_delta = 0;
-    net->layers[0].bottom_boundry_edges_delta = 0;
+    // net->layers[0].left_boundry_edges_delta = 0;
+    // net->layers[0].top_boundry_edges_delta = 0;
+    // net->layers[0].right_boundry_edges_delta = 0;
+    // net->layers[0].bottom_boundry_edges_delta = 0;
 
-    net->layers[0].delta_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1;
-    net->layers[0].delta_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
+    // // // net->layers[0].delta_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1;
+    // // // net->layers[0].delta_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
 
-    printf("DELTA H with boundry/without boundry = %d %d\n", net->layers[0].delta_in_h_with_boundry, net->layers[0].delta_in_h_without_boundry);
-    printf("DELTA W with boundry/without boundry = %d %d\n", net->layers[0].delta_in_w_with_boundry, net->layers[0].delta_in_w_without_boundry);
+    // net->layers[0].delta_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1; 
+    // net->layers[0].delta_in_h_without_boundry = net->layers[0].delta_in_h_with_boundry;
 
-    for (int i = 1; i < (num_layers); ++i)
+    // net->layers[0].delta_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
+    // net->layers[0].delta_in_w_without_boundry = net->layers[0].delta_in_w_with_boundry;
+
+    // printf("DELTA H with boundry/without boundry = %d %d\n", net->layers[0].delta_in_h_with_boundry, net->layers[0].delta_in_h_without_boundry);
+    // printf("DELTA W with boundry/without boundry = %d %d\n", net->layers[0].delta_in_w_with_boundry, net->layers[0].delta_in_w_without_boundry);
+
+    for (int i = 0; i < (num_layers); ++i)
     {
-
-        printf("Top boundry edges = %d\n", top_boundry_edges);
-        printf("Left boundry edges = %d\n", left_boundry_edges);
-        printf("Right boundry edges = %d\n", right_boundry_edges);
-        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-        printf("Start x coordinate = %d\n", start_x_coordinate);
-        printf("Start y coordinte = %d\n", start_y_coordinate);
-        printf("End x coordinate = %d\n", end_x_coordinate);
-        printf("End y coordinate = %d\n\n", end_y_coordinate);
-
 
         int stride = net->layers[i].stride;
         int input_dim_x = net->layers[i].w;
@@ -180,69 +180,93 @@ void partition_backward(network* net,
         int dilated_delta_dim_x = net->layers[i].out_w*stride;
         int dilated_delta_dim_y = net->layers[i].out_h*stride;
 
-        left_boundry_edges += (unit_boundry/stride);
-        top_boundry_edges = left_boundry_edges;
+        if(i == 0){
+            left_boundry_edges = 0;
+            top_boundry_edges = 0;
+            right_boundry_edges = 0;
+            bottom_boundry_edges = 0;
+        }
 
-        right_boundry_edges += (unit_boundry + (stride - 1))/stride;
-        bottom_boundry_edges = right_boundry_edges;
+        else{
+
+            left_boundry_edges = (unit_boundry + net->layers[i-1].left_boundry_edges_delta) /(net->layers[i].stride);
+            top_boundry_edges = (unit_boundry + net->layers[i-1].top_boundry_edges_delta) /(net->layers[i].stride);
+
+            right_boundry_edges = (unit_boundry + net->layers[i-1].right_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
+            bottom_boundry_edges = (unit_boundry + net->layers[i-1].bottom_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
+        }
+        // net->layers[i].left_boundry_edges_delta = left_boundry_edges;
+        // net->layers[i].top_boundry_edges_delta = top_boundry_edges;
+        // net->layers[i].right_boundry_edges_delta = right_boundry_edges;
+        // net->layers[i].bottom_boundry_edges_delta = bottom_boundry_edges;
+
+        if(i>0){
+
+            int prev_stride = net->layers[i-1].stride;
+
+            if((start_x_coordinate - unit_boundry) > 0){
+                start_x_coordinate = (start_x_coordinate - unit_boundry + (stride - 1))/stride;
+            }
+            else{
+                start_x_coordinate = (start_x_coordinate - unit_boundry)/stride;         
+            }
+
+            if((end_x_coordinate + unit_boundry) < 0){
+                end_x_coordinate = (end_x_coordinate + unit_boundry - (stride - 1))/stride;
+            }
+            else{
+                end_x_coordinate = (end_x_coordinate + unit_boundry)/stride;          
+            }
+
+
+            if((start_y_coordinate - unit_boundry) > 0){
+                start_y_coordinate = (start_y_coordinate - unit_boundry + (stride - 1))/stride;
+            }
+            else{
+                start_y_coordinate = (start_y_coordinate - unit_boundry)/stride;          
+            }
+
+            if((end_y_coordinate + unit_boundry) < 0){
+                end_y_coordinate = (end_y_coordinate + unit_boundry - (stride - 1))/stride;
+            }
+            else{
+                end_y_coordinate = (end_y_coordinate + unit_boundry)/stride;          
+            }
+        }
 
         net->layers[i].left_boundry_edges_delta = left_boundry_edges;
         net->layers[i].top_boundry_edges_delta = top_boundry_edges;
         net->layers[i].right_boundry_edges_delta = right_boundry_edges;
         net->layers[i].bottom_boundry_edges_delta = bottom_boundry_edges;
 
-        if((start_x_coordinate - unit_boundry) > 0){
-            start_x_coordinate = (start_x_coordinate - unit_boundry + (stride - 1))/stride;
-        }
-        else{
-            start_x_coordinate = (start_x_coordinate - unit_boundry)/stride;         
-        }
+        net->layers[i].delta_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1; 
+        net->layers[i].delta_in_h_without_boundry = net->layers[i].delta_in_h_with_boundry - (net->layers[i].top_boundry_edges_delta + net->layers[i].bottom_boundry_edges_delta);
 
-        if((end_x_coordinate + unit_boundry) < 0){
-            end_x_coordinate = (end_x_coordinate + unit_boundry - (stride - 1))/stride;
-        }
-        else{
-            end_x_coordinate = (end_x_coordinate + unit_boundry)/stride;          
-        }
-
-
-        if((start_y_coordinate - unit_boundry) > 0){
-            start_y_coordinate = (start_y_coordinate - unit_boundry + (stride - 1))/stride;
-        }
-        else{
-            start_y_coordinate = (start_y_coordinate - unit_boundry)/stride;          
-        }
-
-        if((end_y_coordinate + unit_boundry) < 0){
-            end_y_coordinate = (end_y_coordinate + unit_boundry - (stride - 1))/stride;
-        }
-        else{
-            end_y_coordinate = (end_y_coordinate + unit_boundry)/stride;          
-        }
-
-        net->layers[i].delta_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1;
         net->layers[i].delta_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
-
-        net->layers[i].left_boundry_edges_delta = net->layers[i].delta_start_coordinate_x - start_x_coordinate;
-        net->layers[i].top_boundry_edges_delta = net->layers[i].delta_start_coordinate_y - start_y_coordinate;
-        net->layers[i].right_boundry_edges_delta = end_x_coordinate - net->layers[i].delta_end_coordinate_x;
-        net->layers[i].bottom_boundry_edges_delta = end_y_coordinate - net->layers[i].delta_end_coordinate_y;
+        net->layers[i].delta_in_w_without_boundry = net->layers[i].delta_in_w_with_boundry - (net->layers[i].left_boundry_edges_delta + net->layers[i].right_boundry_edges_delta);
 
         printf("DELTA H with boundry/without boundry = %d %d\n", net->layers[i].delta_in_h_with_boundry, net->layers[i].delta_in_h_without_boundry);
         printf("DELTA W with boundry/without boundry = %d %d\n", net->layers[i].delta_in_w_with_boundry, net->layers[i].delta_in_w_without_boundry);
-
+        printf("Top boundry edges = %d\n", top_boundry_edges);
+        printf("Left boundry edges = %d\n", left_boundry_edges);
+        printf("Right boundry edges = %d\n", right_boundry_edges);
+        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+        printf("Start x coordinate = %d\n", start_x_coordinate);
+        printf("Start y coordinte = %d\n", start_y_coordinate);
+        printf("End x coordinate = %d\n", end_x_coordinate);
+        printf("End y coordinate = %d\n\n", end_y_coordinate);
     }
 
-    printf("Top boundry edges = %d\n", top_boundry_edges);
-    printf("Left boundry edges = %d\n", left_boundry_edges);
-    printf("Right boundry edges = %d\n", right_boundry_edges);
-    printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+    // printf("Top boundry edges = %d\n", top_boundry_edges);
+    // printf("Left boundry edges = %d\n", left_boundry_edges);
+    // printf("Right boundry edges = %d\n", right_boundry_edges);
+    // printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
 
 
-    printf("Start x coordinate = %d\n", start_x_coordinate);
-    printf("Start y coordinte = %d\n", start_y_coordinate);
-    printf("End x coordinate = %d\n", end_x_coordinate);
-    printf("End y coordinate = %d\n\n", end_y_coordinate);
+    // printf("Start x coordinate = %d\n", start_x_coordinate);
+    // printf("Start y coordinte = %d\n", start_y_coordinate);
+    // printf("End x coordinate = %d\n", end_x_coordinate);
+    // printf("End y coordinate = %d\n\n", end_y_coordinate);
 
     for (int i = start_y_coordinate; i <= end_y_coordinate; ++i)
     {
