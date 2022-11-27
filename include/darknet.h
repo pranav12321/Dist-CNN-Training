@@ -235,6 +235,8 @@ struct layer{
     int featuremap_in_w_without_boundry, featuremap_in_h_without_boundry;
     int featuremap_out_h_without_boundry, featuremap_out_w_without_boundry;
 
+    int original_featuremap_in_w, original_featuremap_in_h;
+
     char  * cweights;
     int   * indexes;
     int   * input_layers;
