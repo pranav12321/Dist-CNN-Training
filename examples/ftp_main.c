@@ -11,16 +11,17 @@
 int main_maxpool(){
 
     network *net = calloc(1, sizeof(network));
-    net->n = 5;
+    net->n = 1;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
     //(int batch, int h, int w, int c, int size, int stride, int padding)
-    net->layers[0] = make_maxpool_layer(1, 10, 10, 1, 3, 3, 5); 
+    net->layers[0] = make_maxpool_layer(1, 10, 10, 1, 2, 2, 1); 
     net->layers[0].batch_normalize = 0;
     net->input = calloc(100, sizeof(float));
     net->workspace = calloc(net->layers[0].workspace_size, sizeof(float));
+
 
     float* image_merged = calloc(10*10, sizeof(float));
     fill_cpu(100, 1, image_merged, 1);
@@ -33,14 +34,21 @@ int main_maxpool(){
         }
     }
 
-    for (int i = 0; i < 10; ++i)
-    {
-        net->input[i*10 + 9] = -1;
-        net->input[90 + i] = -1;
-    }
+    // for (int i = 0; i < 10; ++i)
+    // {
+    //     net->input[i*10 + 9] = -1;
+    //     net->input[90 + i] = -1;
+    // }
 
 
     forward_maxpool_layer(net->layers[0], *net);
+
+    fill_cpu(net->layers[0].outputs, 1, net->layers[0].delta, 1);
+
+    net->delta = calloc(100, sizeof(float));
+    backward_maxpool_layer(net->layers[0], *net);
+
+
     int out_size = net->layers[0].out_h * net->layers[0].out_w * net->layers[0].out_c * net->layers[0].batch;
 
     for (int i = 0; i < net->layers[0].out_h; ++i)
@@ -48,6 +56,15 @@ int main_maxpool(){
         for (int j = 0; j < net->layers[0].out_w; ++j)
         {
             printf("%.4f ", net->layers[0].output[(i*net->layers[0].out_w) + j]);
+        }
+        printf("\n");
+    }
+
+    for (int i = 0; i < 10; ++i)
+    {
+        for (int j = 0; j < 10; ++j)
+        {
+            printf("%.4f ", net->delta[(i*10) + j]);
         }
         printf("\n");
     }
@@ -1023,6 +1040,7 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
 
 
 int main(){
-    main_distributed();
-    //main_reference();
+    //main_distributed();
+    main_reference();
+    //main_maxpool();
 }

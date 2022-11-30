@@ -44,7 +44,7 @@ void im2col_cpu_ftp_version(float* data_im,
 {
     int c,h,w;
     int height_col = height_out;//(height + 2*pad - ksize) / stride + 1;
-    int width_col = height_out;//(width + 2*pad - ksize) / stride + 1;
+    int width_col = width_out;//(width + 2*pad - ksize) / stride + 1;
 
     int channels_col = channels * ksize * ksize;
     for (c = 0; c < channels_col; ++c) {

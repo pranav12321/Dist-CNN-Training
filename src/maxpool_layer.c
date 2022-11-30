@@ -125,3 +125,15 @@ void backward_maxpool_layer(const maxpool_layer l, network net)
     }
 }
 
+void backward_maxpool_layer_distributed(const maxpool_layer l, network net)
+{
+    int i;
+    int h = l.out_h;
+    int w = l.out_w;
+    int c = l.c;
+    for(i = 0; i < h*w*c*l.batch; ++i){
+        int index = l.indexes[i];
+        net.delta[index] += l.delta_with_boundry[i];
+    }
+}
+

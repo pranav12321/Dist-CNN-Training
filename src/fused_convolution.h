@@ -8,15 +8,6 @@ void execute_forward();
 
 void execute_backward();
 
-partition_backward(network* net, 
-                        int DEVICE_ID_X, int DEVICE_ID_Y,
-                        network *** SHARED_NETWORKS,
-                        float*** SHARED_EXP_DELTAS,
-                        int filter_size,
-                        group_profile_backward* profile,
-                        int start_x_backward, int start_y_backward,
-                        int end_x_backward, int end_y_backward);
-
 void assemble_forward_group_data(network*** SHARED_NETWORKS, 
                                 float***SHARED_INPUT_IMAGES,
                                 int NUM_TILES_X, int NUM_TILES_Y,
