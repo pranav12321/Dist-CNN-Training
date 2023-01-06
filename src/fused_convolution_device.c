@@ -1058,3 +1058,89 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 
     }    
 }
+
+//TODO : Variable filter sizes
+#ifdef SERVER
+void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
+
+    float* data = malloc(net->n * net->layers[0].size * net->layers[0].size * sizeof(float));
+    for (int i = 0; i < NUM_TILES_Y; ++i)
+    {
+        for (int j = 0; j < NUM_TILES_X; ++j){
+            if((i != 0) || (j != 0)){
+                receive_boundry(data, net->n * net->layers[0].size * net->layers[0].size, j, i);
+                for (int l = 0; l < net->n; ++l){
+                    for (int m = 0; m < net->layers[l].size; ++m)
+                    {
+                        for (int n = 0; n < net->layers[l].size; ++n)
+                        {
+                            net->layers[l].weight_updates[m*net->layers[l].size + n] += data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < NUM_TILES_Y; ++i)
+    {
+        for (int j = 0; j < NUM_TILES_X; ++j){
+            if((i != 0) || (j != 0)){
+                for (int l = 0; l < net->n; ++l){
+                    for (int m = 0; m < net->layers[l].size; ++m)
+                    {
+                        for (int n = 0; n < net->layers[l].size; ++n)
+                        {
+                            data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)] = net->layers[l].weight_updates[m*net->layers[l].size + n];
+                        }
+                    }
+                }
+            }
+
+            send_boundry(data, net->n * net->layers[0].size * net->layers[0].size, j, i);
+        }
+    }
+
+    free(data);
+
+
+}
+
+#endif
+
+
+
+#ifdef CLIENT
+void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
+
+    float* data = malloc(net->n * net->layers[0].size * net->layers[0].size * sizeof(float));
+
+    for (int l = 0; l < net->n; ++l){
+        for (int m = 0; m < net->layers[l].size; ++m)
+        {
+            for (int n = 0; n < net->layers[l].size; ++n)
+            {
+                data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)] = net->layers[l].weight_updates[m*net->layers[l].size + n];
+            }
+        }
+    }
+
+    send_boundry(data, net->n * net->layers[0].size * net->layers[0].size, 0, 0);
+
+    receive_boundry(data, net->n * net->layers[0].size * net->layers[0].size, 0, 0);
+    for (int l = 0; l < net->n; ++l){
+        for (int m = 0; m < net->layers[l].size; ++m)
+        {
+            for (int n = 0; n < net->layers[l].size; ++n)
+            {
+                net->layers[l].weight_updates[m*net->layers[l].size + n] = data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)];
+            }
+        }
+    }
+
+    free(data);
+
+
+}
+
+#endif

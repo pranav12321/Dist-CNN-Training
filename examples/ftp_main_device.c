@@ -340,6 +340,13 @@ int main_device(){
 
     }
 
+            #ifdef SERVER
+                receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            #endif
+            #ifdef CLIENT
+                sync_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            #endif
+
             for (int m = 0; m < 3; ++m)
             {
                 for (int n = 0; n < 3; ++n)
