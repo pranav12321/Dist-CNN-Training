@@ -437,7 +437,7 @@ void assemble_forward_group_data_device(network* net,
                                 float* INPUT_IMAGE,
                                 int NUM_TILES_X, int NUM_TILES_Y,
 								 group_profile_forward group,
-                                 int DEVICE_ID_X, int DEVICE_ID_Y
+                                 int device_id_x, int device_id_y
 								 ){
 
 
@@ -461,7 +461,7 @@ void assemble_forward_group_data_device(network* net,
         send_forward_group_boundry_data_device(net, INPUT_IMAGE,
             NUM_TILES_X, NUM_TILES_Y,
             current_layer_idx, 
-            DEVICE_ID_X, DEVICE_ID_Y);
+            device_id_x, device_id_y);
 
 
         int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
@@ -526,8 +526,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_top, 
                 top_boundry_edges, tile_input_width_original, BOTTOM, 
-                DEVICE_ID_X, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x, device_id_y-1,
+                device_id_x, device_id_y);
 
             int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
             for (int i = 0; i < top_boundry_edges; ++i)
@@ -553,8 +553,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_left, 
                 tile_input_height_original, left_boundry_edges, RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y,
+                device_id_x, device_id_y);
 
             int top_write_offset = (top_boundry_edges >= 0) ? top_boundry_edges : 0;
             for (int i = 0; i < tile_input_height_original; ++i)
@@ -575,8 +575,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_bottom, 
                 bottom_boundry_edges, tile_input_width_original, TOP, 
-                DEVICE_ID_X, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x, device_id_y+1,
+                device_id_x, device_id_y);
 
             int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
             int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
@@ -598,8 +598,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_right, 
                 tile_input_height_original, right_boundry_edges, LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y,
+                device_id_x, device_id_y);
 
             int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
             int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges) : 0;
@@ -622,8 +622,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_top_left, 
                 top_boundry_edges, left_boundry_edges, BOTTOM_RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y-1,
+                device_id_x, device_id_y);
 
             for (int i = 0; i < top_boundry_edges; ++i)
             {
@@ -643,8 +643,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_top_right, 
                 top_boundry_edges, right_boundry_edges, BOTTOM_LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y-1,
+                device_id_x, device_id_y);
 
             int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
             for (int i = 0; i < top_boundry_edges; ++i)
@@ -665,8 +665,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_bottom_left, 
                 bottom_boundry_edges, left_boundry_edges, TOP_RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y+1,
+                device_id_x, device_id_y);
 
             int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
             for (int i = 0; i < bottom_boundry_edges; ++i)
@@ -687,8 +687,8 @@ void assemble_forward_group_data_device(network* net,
                 current_layer_idx, 
                 &boundry_bottom_right, 
                 bottom_boundry_edges, right_boundry_edges, TOP_LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y+1,
+                device_id_x, device_id_y);
 
             int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
             int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
@@ -731,7 +731,7 @@ void assemble_backward_group_data_device(network* net,
                                 float* OUTPUT_DELTA,
                                 int NUM_TILES_X, int NUM_TILES_Y,
                                  group_profile_backward group,
-                                 int DEVICE_ID_X, int DEVICE_ID_Y,
+                                 int device_id_x, int device_id_y,
                                  int num_layers
                                  ){
 
@@ -754,7 +754,7 @@ void assemble_backward_group_data_device(network* net,
         send_backward_group_boundry_data_device(net, OUTPUT_DELTA,
             NUM_TILES_X, NUM_TILES_Y,
             current_layer_idx, num_layers,
-            DEVICE_ID_X, DEVICE_ID_Y);
+            device_id_x, device_id_y);
 
         //Core tile delta
         for (int i = 0; i < (tile_delta_in_height); ++i)
@@ -775,8 +775,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_top, 
                 top_boundry_edges, tile_delta_in_width, BOTTOM, 
-                DEVICE_ID_X, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x, device_id_y-1,
+                device_id_x, device_id_y);
 
         int left_write_offset = left_boundry_edges;
         for (int i = 0; i < top_boundry_edges; ++i)
@@ -801,8 +801,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_left, 
                 tile_delta_in_height, left_boundry_edges, RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y,
+                device_id_x, device_id_y);
 
             int top_write_offset = top_boundry_edges;
             for (int i = 0; i < tile_delta_in_height; ++i)
@@ -823,8 +823,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_bottom, 
                 bottom_boundry_edges, tile_delta_in_width, TOP, 
-                DEVICE_ID_X, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x, device_id_y+1,
+                device_id_x, device_id_y);
 
             int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
             int left_write_offset = left_boundry_edges;
@@ -847,8 +847,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_right, 
                 tile_delta_in_height, right_boundry_edges, LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y,
+                device_id_x, device_id_y);
 
             int left_write_offset = left_boundry_edges + tile_delta_in_width;
             int top_write_offset = top_boundry_edges;
@@ -870,8 +870,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_top_left, 
                 top_boundry_edges, left_boundry_edges, BOTTOM_RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y-1,
+                device_id_x, device_id_y);
 
             for (int i = 0; i < top_boundry_edges; ++i)
             {
@@ -891,8 +891,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_top_right, 
                 top_boundry_edges, right_boundry_edges, BOTTOM_LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y-1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y-1,
+                device_id_x, device_id_y);
 
             int left_write_offset = (left_boundry_edges + tile_delta_in_width);
             for (int i = 0; i < top_boundry_edges; ++i)
@@ -913,8 +913,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_bottom_left, 
                 bottom_boundry_edges, left_boundry_edges, TOP_RIGHT, 
-                DEVICE_ID_X-1, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x-1, device_id_y+1,
+                device_id_x, device_id_y);
 
             int top_write_offset = top_boundry_edges + tile_delta_in_height;
             for (int i = 0; i < bottom_boundry_edges; ++i)
@@ -935,8 +935,8 @@ void assemble_backward_group_data_device(network* net,
                 current_layer_idx, num_layers,
                 &boundry_bottom_right, 
                 bottom_boundry_edges, right_boundry_edges, TOP_LEFT, 
-                DEVICE_ID_X+1, DEVICE_ID_Y+1,
-                DEVICE_ID_X, DEVICE_ID_Y);
+                device_id_x+1, device_id_y+1,
+                device_id_x, device_id_y);
 
             int top_write_offset = top_boundry_edges + tile_delta_in_height;
             int left_write_offset = left_boundry_edges + tile_delta_in_width;
@@ -965,10 +965,10 @@ void assemble_backward_group_data_device(network* net,
 
 
 
-void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int DEVICE_ID_Y, int DEVICE_ID_X){
+void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
     if(layer_idx > 0){
 
-        if(DEVICE_ID_Y == 0){
+        if(device_id_y == 0){
             for (int m = 0; m < net->layers[layer_idx].top_boundry_edges_featuremap; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
@@ -978,7 +978,7 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
             }
         }
 
-        if(DEVICE_ID_X == 0){
+        if(device_id_x == 0){
             for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_featuremap; ++n)
@@ -988,7 +988,7 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
             }
         }
 
-        if(DEVICE_ID_Y == (NUM_TILES_Y - 1)){
+        if(device_id_y == (NUM_TILES_Y - 1)){
             for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_featuremap; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
@@ -998,7 +998,7 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
             }
         }
 
-        if(DEVICE_ID_X == (NUM_TILES_X - 1)){
+        if(device_id_x == (NUM_TILES_X - 1)){
             for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_featuremap; ++n)
@@ -1013,10 +1013,10 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 
 
 
-void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int DEVICE_ID_Y, int DEVICE_ID_X){
+void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
     if(layer_idx > 0){
 
-        if(DEVICE_ID_Y == 0){
+        if(device_id_y == 0){
             for (int m = 0; m < net->layers[layer_idx].top_boundry_edges_delta; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
@@ -1026,7 +1026,7 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
             }
         }
 
-        if(DEVICE_ID_X == 0){
+        if(device_id_x == 0){
             for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_delta; ++n)
@@ -1036,7 +1036,7 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
             }
         }
 
-        if(DEVICE_ID_Y == (NUM_TILES_Y - 1)){
+        if(device_id_y == (NUM_TILES_Y - 1)){
             for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_delta; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
@@ -1046,7 +1046,7 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
             }
         }
 
-        if(DEVICE_ID_X == (NUM_TILES_X - 1)){
+        if(device_id_x == (NUM_TILES_X - 1)){
             for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
             {
                 for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_delta; ++n)

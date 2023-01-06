@@ -1,5 +1,5 @@
-#ifndef FUSED_CONVOLUTION
-#define FUSED_CONVOLUTION
+#ifndef FUSED_CONVOLUTION_DEVICE
+#define FUSED_CONVOLUTION_DEVICE
 #include "darknet.h"
 #include "convolutional_layer.h"
 #include "fused_device.h"

@@ -13,8 +13,6 @@
 //12 12 12 6 6 6 3 3 
 //1  1  2  1 1 2 1 1
 
-#define DEVICE_ID_X 1
-#define DEVICE_ID_Y 0
 
 int main_device(){
 
