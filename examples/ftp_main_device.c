@@ -24,6 +24,9 @@ int main_device(){
 
     train_groups_profile profile;
 
+    // #ifdef SERVER
+    //     init_server();
+    // #endif
     init_transport();
 
     profile.num_forward_groups = 3;
