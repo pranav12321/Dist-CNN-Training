@@ -82,13 +82,13 @@ void partition_forward_device(network* net,
         net->layers[6].stride = 1;
         net->layers[7].stride = 1;
 
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 24;
+        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 12;
         net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 12;
 
-        net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 12;
+        net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 6;
         net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_w = 6;
 
-        net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_h = 6;
+        net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_h = 3;
         net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_w = 3;
 
         net->layers[i].left_boundry_edges_featuremap = left_boundry_edges;

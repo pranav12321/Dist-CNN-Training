@@ -17,17 +17,18 @@
 int main_device(){
 
     int NUM_TILES_X = 2;
-    int NUM_TILES_Y = 1;
+    int NUM_TILES_Y = 2;
     int INPUT_WIDTH = 24;
     int INPUT_HEIGHT = 24;
 
 
     train_groups_profile profile;
 
-    // #ifdef SERVER
-    //     init_server();
-    // #endif
-    init_transport();
+    #ifdef SERVER
+        init_server();
+    #else
+        init_transport();
+    #endif
 
     profile.num_forward_groups = 3;
     profile.num_backward_groups = 3;
@@ -40,42 +41,42 @@ int main_device(){
     profile.fp[0].start_x_forward = 0;
     profile.fp[0].start_y_forward = 0;
     profile.fp[0].end_x_forward = 5;
-    profile.fp[0].end_y_forward = 11;
+    profile.fp[0].end_y_forward = 5;
 
     profile.fp[1].layer_start_idx = 4;
     profile.fp[1].layer_end_idx = 5;
     profile.fp[1].start_x_forward = 0;
     profile.fp[1].start_y_forward = 0;
     profile.fp[1].end_x_forward = 2;
-    profile.fp[1].end_y_forward = 5;
+    profile.fp[1].end_y_forward = 2;
 
     profile.fp[2].layer_start_idx = 6;
     profile.fp[2].layer_end_idx = 7;
     profile.fp[2].start_x_forward = 0;
     profile.fp[2].start_y_forward = 0;
     profile.fp[2].end_x_forward = 2;
-    profile.fp[2].end_y_forward = 5;
+    profile.fp[2].end_y_forward = 2;
 
     profile.bp[0].layer_start_idx = 0;
     profile.bp[0].layer_end_idx = 3;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
     profile.bp[0].end_x_backward = 11;
-    profile.bp[0].end_y_backward = 23;
+    profile.bp[0].end_y_backward = 11;
 
     profile.bp[1].layer_start_idx = 4;
     profile.bp[1].layer_end_idx = 5;
     profile.bp[1].start_x_backward = 0;
     profile.bp[1].start_y_backward = 0;
     profile.bp[1].end_x_backward = 5;
-    profile.bp[1].end_y_backward = 11;
+    profile.bp[1].end_y_backward = 5;
 
     profile.bp[2].layer_start_idx = 6;
     profile.bp[2].layer_end_idx = 7;
     profile.bp[2].start_x_backward = 0;
     profile.bp[2].start_y_backward = 0;
     profile.bp[2].end_x_backward = 2;
-    profile.bp[2].end_y_backward = 5;
+    profile.bp[2].end_y_backward = 2;
 
 
 
