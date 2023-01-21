@@ -498,10 +498,6 @@ void forward_convolutional_layer(convolutional_layer l, network net)
     activate_array(l.output, l.outputs*l.batch, l.activation);
     if(l.binary || l.xnor) swap_binary(&l);
 
-
-
-
-                    printf("\n");
 }
 
 void backward_convolutional_layer(convolutional_layer l, network net)

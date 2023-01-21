@@ -63,33 +63,31 @@ void partition_forward_device(network* net,
         int featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
         int featuremap_in_w_without_boundry = featuremap_in_w_with_boundry - (left_boundry_edges + right_boundry_edges);
 
-        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, 1, 1, 1, filter_size, stride, 0, RELU, 0, 0, 0, 0);
+        int num_channels = ((i == 0) ? 3 : 12);
+        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, num_channels, 12, 1, filter_size, stride, 0, RELU, 0, 0, 0, 0);
 
-        for (int i_f = 0; i_f < filter_size; ++i_f)
+        for (int i_f = 0; i_f < filter_size*filter_size*net->layers[i].c*net->layers[i].n; ++i_f)
         {
-            for (int j_f = 0; j_f < filter_size; ++j_f)
-            {
-                net->layers[i].weights[i_f*filter_size + j_f] = 0.1;
-            }
+                net->layers[i].weights[i_f] = 0.1;
         }
 
         net->layers[0].stride = 1;
         net->layers[1].stride = 1;
-        net->layers[2].stride = 2;
+        net->layers[2].stride = 1;
         net->layers[3].stride = 1;
         net->layers[4].stride = 1;
-        net->layers[5].stride = 2;
-        net->layers[6].stride = 1;
-        net->layers[7].stride = 1;
+        // net->layers[5].stride = 2;
+        // net->layers[6].stride = 1;
+        // net->layers[7].stride = 1;
 
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 12;
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 12;
+        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 302;
+        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 302;
 
-        net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 6;
-        net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_w = 6;
+        // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 6;
+        // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_w = 6;
 
-        net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_h = 3;
-        net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_w = 3;
+        // net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_h = 3;
+        // net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_w = 3;
 
         net->layers[i].left_boundry_edges_featuremap = left_boundry_edges;
         net->layers[i].top_boundry_edges_featuremap = top_boundry_edges;
@@ -112,18 +110,18 @@ void partition_forward_device(network* net,
         }
 
 
-        printf("Layer %d\n\n", i);
-        printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
-        printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
+        // printf("Layer %d\n\n", i);
+        // printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
+        // printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
 
-        printf("Top boundry edges = %d\n", top_boundry_edges);
-        printf("Left boundry edges = %d\n", left_boundry_edges);
-        printf("Right boundry edges = %d\n", right_boundry_edges);
-        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-        printf("Start x coordinate = %d\n", start_x_coordinate);
-        printf("Start y coordinte = %d\n", start_y_coordinate);
-        printf("End x coordinate = %d\n", end_x_coordinate);
-        printf("End y coordinate = %d\n\n", end_y_coordinate);
+        // printf("Top boundry edges = %d\n", top_boundry_edges);
+        // printf("Left boundry edges = %d\n", left_boundry_edges);
+        // printf("Right boundry edges = %d\n", right_boundry_edges);
+        // printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+        // printf("Start x coordinate = %d\n", start_x_coordinate);
+        // printf("Start y coordinte = %d\n", start_y_coordinate);
+        // printf("End x coordinate = %d\n", end_x_coordinate);
+        // printf("End y coordinate = %d\n\n", end_y_coordinate);
         
     }
 

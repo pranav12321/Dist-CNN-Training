@@ -14,7 +14,7 @@
 #include <arpa/inet.h> //close
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros
 
-#define MAX 8000
+#define MAX 40000
 #define PORT 8080 //SERVER PORT
 #define SA struct sockaddr
 
@@ -23,16 +23,16 @@
   
 int sockfd, connfd;
 
-char transmit_buffer[MAX];
-char receive_buffer[MAX];
-char slip_buffer[MAX*2 + 2];
-char decoded_buffer[MAX*2 + 2];
-char encoded_buffer[MAX*2 + 2];
+char transmit_buffer[MAX*5];
+char receive_buffer[MAX*5];
+char slip_buffer[MAX*4 + 2];
+char decoded_buffer[MAX*4 + 2];
+char encoded_buffer[MAX*4 + 2];
 
-char partitioned_receive_buffer[MAX*3];
+char partitioned_receive_buffer[MAX*5];
 
 #ifdef SERVER
-    char server_partitioned_receive_buffer[MAX*3];
+    char server_partitioned_receive_buffer[MAX*20];
 #endif
 // char receive_buffer1[MAX];
 // char receive_buffer2[MAX];
@@ -337,9 +337,25 @@ void * route_client_links(void *vargp){
                 // {
                     //Check if it was for closing , and also read the
                     //incoming message
-                    printf("Server to Receive from client %d\n", i);
+                    //printf("Server to Receive from client %d\n", i);
+
+                slip_state_machine_init();
+                int first_entry = 0;
+                while ( (slip_get_state() != WAITING_FOR_START) 
+                        || ( first_entry == 0 ) )
+                {
+                    first_entry = 1;
+                        /* code */
+                    
+                    
                     bytes = recv( sd , route_client_offset, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
-                    printf("Server received %d bytes from client %d\n", bytes, i);
+
+                    if(bytes == 32768){
+                        int x = 2;
+                    }
+
+                    if (bytes > -1)
+                        printf("Server received %d bytes from client %d\n", bytes, i);
 
                     if (bytes == 0)
                     {
@@ -372,7 +388,7 @@ void * route_client_links(void *vargp){
                                 // {
                                 //     printf("%d\n", slip_buffer[s]);
                                 // }
-
+                                //if(k < (bytes-1))
                                 slip_state_machine_init();
                                 full_cycles ++;
                                 printf("Server %d %d received full packet of %d bytes from device %d %d, k = %d, encoded size = %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2], k, k+1 - last_size);
@@ -409,7 +425,9 @@ void * route_client_links(void *vargp){
                             }
                         }
                     }
-            //}
+                }
+
+                slip_state_machine_init();
             //full_cycles = 0;
         }     
     }
@@ -557,7 +575,8 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
         }          
 
 
-        bytes = read(sockfd, receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
+        bytes = recv( sockfd , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
+        //read(sockfd, receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
 
         if(bytes > 0){
         
@@ -572,7 +591,7 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
                     int client_rx_id = ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1]);
                     
                     //memcpy(partitioned_receive_buffer + ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1])*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), decoded_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
-                    printf("Client %d %d received from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_buffer[1], decoded_buffer[2]);
+                    printf("Client %d %d received %d bytes from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2]);
                     for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
                     {
                         if(client_packets.receive_device_data_ptrs[j].valid == 0){

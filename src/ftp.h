@@ -55,6 +55,26 @@ typedef struct device_ftp_args_v2{
 
 } device_ftp_args_v2;
 
+
+typedef struct ftp_args{
+    int NUM_TILES_X;
+    int NUM_TILES_Y;
+
+    int DEVICE_ID_X;
+    int DEVICE_ID_Y;
+
+    int INPUT_WIDTH;
+    int INPUT_HEIGHT;
+
+    network* net;
+    int filter_size;
+    int stride_vector;
+    //float* image_input;
+    //float* delta;
+    int num_layers;
+
+} ftp_args;
+
 typedef enum orientation{
     TOP,
     LEFT,
