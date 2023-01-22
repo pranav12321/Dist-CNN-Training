@@ -341,9 +341,9 @@ void * route_client_links(void *vargp){
 
                 slip_state_machine_init();
                 int first_entry = 0;
-                while ( (slip_get_state() != WAITING_FOR_START) 
-                        || ( first_entry == 0 ) )
-                {
+                // while ( (slip_get_state() != WAITING_FOR_START) 
+                //         || ( first_entry == 0 ) )
+                // {
                     first_entry = 1;
                         /* code */
                     
@@ -425,7 +425,7 @@ void * route_client_links(void *vargp){
                             }
                         }
                     }
-                }
+                //}
 
                 slip_state_machine_init();
             //full_cycles = 0;

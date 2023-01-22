@@ -226,9 +226,9 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     // l.delta_ftp_top_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_left_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_top_left_receive  = calloc(l.batch*l.outputs*10, sizeof(float));
-    l.delta_ftp_bottom_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
-    l.delta_ftp_bottom_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
-    l.delta_ftp_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
+   // l.delta_ftp_bottom_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
+    //l.delta_ftp_bottom_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
+    //l.delta_ftp_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
 
 
     l.forward = forward_convolutional_layer;
