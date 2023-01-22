@@ -63,8 +63,8 @@ void partition_forward_device(network* net,
         int featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
         int featuremap_in_w_without_boundry = featuremap_in_w_with_boundry - (left_boundry_edges + right_boundry_edges);
 
-        int num_channels = ((i == 0) ? 3 : 12);
-        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, num_channels, 12, 1, filter_size, stride, 0, RELU, 0, 0, 0, 0);
+        int num_channels = ((i == 0) ? 2 : 2);
+        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, num_channels, 2, 1, filter_size, stride, 0, RELU, 0, 0, 0, 0);
 
         for (int i_f = 0; i_f < filter_size*filter_size*net->layers[i].c*net->layers[i].n; ++i_f)
         {
@@ -80,8 +80,8 @@ void partition_forward_device(network* net,
         // net->layers[6].stride = 1;
         // net->layers[7].stride = 1;
 
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 302;
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 302;
+        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 6;
+        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 6;
 
         // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 6;
         // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_w = 6;

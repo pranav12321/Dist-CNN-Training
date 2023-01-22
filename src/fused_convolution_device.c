@@ -1274,15 +1274,17 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
         total_weights += num_filters*channels*filter_size*filter_size;
     }    
 
-    float* data = malloc(total_weights * sizeof(float));
+    float* data = calloc(total_weights, sizeof(float));
     for (int i = 0; i < NUM_TILES_Y; ++i)
     {
         for (int j = 0; j < NUM_TILES_X; ++j){
             if((i != 0) || (j != 0)){
                 receive_boundry(data, total_weights, j, i);
-
+                //printf("Weights from device %d %d\n", j, i);
                 int layer_cumulative_weights = 0;
                 for (int l = 0; l < net->n; ++l){
+
+                   // printf("Weights of layer %d\n", l);
 
                     int num_filters = net->layers[l].n;
                     int filter_size = net->layers[l].size;
@@ -1298,12 +1300,22 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
                                 {
                                     net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n] +=
                                      data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)];
+
+                                     //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
                                 }
+                                //printf("\n");
                             }
+
+                            //printf("\n");
                         }
+
+                        //printf("\n\n");
+
                     }
+                    //printf("\n\n\n");
                     layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
                 }
+                //printf("\n\n\n\n");
             }
         }
     }
@@ -1315,8 +1327,11 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
         for (int j = 0; j < NUM_TILES_X; ++j){
             if((i != 0) || (j != 0)){
 
+                printf("Weights for device %d %d\n", j, i);
                 int layer_cumulative_weights = 0;
                 for (int l = 0; l < net->n; ++l){
+
+                    printf("Weights for layer %d\n", l);
 
                     int num_filters = net->layers[l].n;
                     int filter_size = net->layers[l].size;
@@ -1332,12 +1347,19 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
                                 {
                                     data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)] = 
                                     net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n];
+
+                                    printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
                                 }
+                                printf("\n");
                             }
+                            printf("\n");
                         }
+                        printf("\n\n");
                     }
+                    printf("\n\n\n");
                     layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
                 }
+                printf("\n\n\n\n");
             }
 
             send_boundry(data, total_weights, j, i);
@@ -1435,6 +1457,8 @@ void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
     //     }
     // }
 
+    layer_cumulative_weights = 0;
+
     for (int l = 0; l < net->n; ++l){
 
         int num_filters = net->layers[l].n;
@@ -1451,7 +1475,10 @@ void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
                     {
                         net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n] = 
                         data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)];
+
+                    //    printf("%.2f ", net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
                     }
+                  //  printf("\n");
                 }
             }
         }

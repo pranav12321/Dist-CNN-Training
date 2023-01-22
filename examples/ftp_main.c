@@ -1056,7 +1056,7 @@ int main_yolo(){
     int unit_boundry = 1;
 
     //yolo v2
-    net->layers[0] = make_convolutional_layer(1, 6, 6, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[0] = make_convolutional_layer(1, 12, 12, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     //(int batch, int h, int w, int c, int size, int stride, int padding)
     // net->layers[1] = make_maxpool_layer(1, 604/2, 604/2, 32, 2, 2, 0); 
     // net->layers[2] = make_convolutional_layer(1, 604/2, 604/2, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
@@ -1064,10 +1064,10 @@ int main_yolo(){
     // net->layers[4] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
 
-    net->layers[1] = make_convolutional_layer(1, 6, 6, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, 6, 6, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, 6, 6, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, 6, 6, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[1] = make_convolutional_layer(1, 12, 12, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(1, 12, 12, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[3] = make_convolutional_layer(1, 12, 12, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(1, 12, 12, 2, 2, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     // net->layers[5] = make_convolutional_layer(1, 152/2, 152/2, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
     // net->layers[6] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
@@ -1152,22 +1152,22 @@ int main_yolo(){
         net->input = net->layers[l].output;
 
 
-        for (size_t i = 0; i < 6; i++)
+        for (size_t i = 0; i < 12; i++)
         {
-            for (size_t j = 0; j < 6; j++)
+            for (size_t j = 0; j < 12; j++)
             {
-                printf("%.2f ", net->layers[l].output[i*6 + j]);
+                printf("%.2f ", net->layers[l].output[i*12 + j]);
             }
             printf("\n");
             
         }
         printf("\n");
 
-        for (size_t i = 0; i < 6; i++)
+        for (size_t i = 0; i < 12; i++)
         {
-            for (size_t j = 0; j < 6; j++)
+            for (size_t j = 0; j < 12; j++)
             {
-                printf("%.2f ", net->layers[l].output[36 + i*6 + j]);
+                printf("%.2f ", net->layers[l].output[144 + i*12 + j]);
             }
             printf("\n");
             
@@ -1183,17 +1183,66 @@ int main_yolo(){
         net->input = net->layers[l-1].output;
         net->delta = net->layers[l-1].delta;
         backward_convolutional_layer(net->layers[l], *net);
+
+    //     printf("Delta layer %d\n", l);
+
+    //     for (int m = 0; m < 12; ++m)
+    //     {
+    //         for (int n = 0; n < 12; ++n)
+    //         {
+    //             printf("%.2f ", net->layers[l].delta[m*12 + n]);
+    //         }
+    //         printf("\n");
+            
+    //     }
+    //     printf("\n");
+
+
+    //     for (int m = 0; m < 12; ++m)
+    //     {
+    //         for (int n = 0; n < 12; ++n)
+    //         {
+    //             printf("%.2f ", net->layers[l].delta[144 + m*12 + n]);
+    //         }
+    //         printf("\n");
+            
+    //     }
+    //     printf("\n");
     }
 
 
 
+    //     printf("Delta layer 0\n");
+
+    //     for (int m = 0; m < 12; ++m)
+    //     {
+    //         for (int n = 0; n < 12; ++n)
+    //         {
+    //             printf("%.2f ", net->layers[0].delta[m*12 + n]);
+    //         }
+    //         printf("\n");
+            
+    //     }
+    //     printf("\n");
+
+        // for (int m = 0; m < 12; ++m)
+        // {
+        //     for (int n = 0; n < 12; ++n)
+        //     {
+        //         printf("%.2f ", net->layers[0].delta[144 + m*12 + n]);
+        //     }
+        //     printf("\n");
+            
+        // }
+        // printf("\n");
+
 
 
             for (size_t i = 0; i < 3; i++)
             {
                 for (size_t j = 0; j < 3; j++)
                 {
-                    printf("%.2f ", net->layers[1].weight_updates[i*3 + j]);
+                    printf("%.2f ", net->layers[1].weight_updates[9 + i*3 + j]);
                 }
                 printf("\n");
                 
@@ -1204,7 +1253,7 @@ int main_yolo(){
             {
                 for (size_t j = 0; j < 3; j++)
                 {
-                    printf("%.2f ", net->layers[2].weight_updates[i*3 + j]);
+                    printf("%.2f ", net->layers[2].weight_updates[9 + i*3 + j]);
                 }
                 printf("\n");
                 
@@ -1215,7 +1264,7 @@ int main_yolo(){
             {
                 for (size_t j = 0; j < 3; j++)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[i*3 + j]);
+                    printf("%.2f ", net->layers[3].weight_updates[9 + i*3 + j]);
                 }
                 printf("\n");
                 
@@ -1226,7 +1275,7 @@ int main_yolo(){
             {
                 for (size_t j = 0; j < 3; j++)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[i*3 + j]);
+                    printf("%.2f ", net->layers[4].weight_updates[9 + i*3 + j]);
                 }
                 printf("\n");
                 
