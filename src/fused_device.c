@@ -71,6 +71,17 @@ void partition_forward_device(network* net,
                 net->layers[i].weights[i_f] = 0.1;
         }
 
+        // for (int m = 0; m < 3; ++m)
+        // {
+        //     for (int n = 0; n < 3; ++n)
+        //     {
+        //         printf("%.2f ", net->layers[3].weight_updates[m*3 + n]);
+        //     }
+        //     printf("\n");
+            
+        // }
+        // printf("\n");
+
         net->layers[0].stride = 1;
         net->layers[1].stride = 1;
         net->layers[2].stride = 1;

@@ -1143,7 +1143,7 @@ int main_yolo(){
     net->input = calloc(net->inputs, sizeof(float));
 
     fill_cpu(net->inputs, 1, net->input, 1);
-    fill_cpu(net->layers[3].outputs, 1, net->layers[4].delta, 1);
+    fill_cpu(net->layers[4].outputs, 1, net->layers[4].delta, 1);
 
     for (int l = 0; l < 5; ++l)
     {
@@ -1152,27 +1152,27 @@ int main_yolo(){
         net->input = net->layers[l].output;
 
 
-        for (size_t i = 0; i < 12; i++)
-        {
-            for (size_t j = 0; j < 12; j++)
-            {
-                printf("%.2f ", net->layers[l].output[i*12 + j]);
-            }
-            printf("\n");
+        // for (size_t i = 0; i < 12; i++)
+        // {
+        //     for (size_t j = 0; j < 12; j++)
+        //     {
+        //         printf("%.2f ", net->layers[l].output[i*12 + j]);
+        //     }
+        //     printf("\n");
             
-        }
-        printf("\n");
+        // }
+        // printf("\n");
 
-        for (size_t i = 0; i < 12; i++)
-        {
-            for (size_t j = 0; j < 12; j++)
-            {
-                printf("%.2f ", net->layers[l].output[144 + i*12 + j]);
-            }
-            printf("\n");
+        // for (size_t i = 0; i < 12; i++)
+        // {
+        //     for (size_t j = 0; j < 12; j++)
+        //     {
+        //         printf("%.2f ", net->layers[l].output[144 + i*12 + j]);
+        //     }
+        //     printf("\n");
             
-        }
-        printf("\n");
+        // }
+        // printf("\n");
 
     }
 
@@ -1238,44 +1238,226 @@ int main_yolo(){
 
 
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[1].weight_updates[9 + i*3 + j]);
+                    printf("%.2f ", net->layers[0].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[2].weight_updates[9 + i*3 + j]);
+                    printf("%.2f ", net->layers[0].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[9 + i*3 + j]);
+                    printf("%.2f ", net->layers[0].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[9 + i*3 + j]);
+                    printf("%.2f ", net->layers[0].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[3].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[3].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[3].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[3].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[4].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[4].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[4].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[4].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
