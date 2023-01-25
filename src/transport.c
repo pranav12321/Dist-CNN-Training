@@ -29,11 +29,6 @@ char slip_buffer[MAX*4 + 2];
 char decoded_buffer[MAX*4 + 2];
 char encoded_buffer[MAX*4 + 2];
 
-char partitioned_receive_buffer[MAX*5];
-
-#ifdef SERVER
-    char server_partitioned_receive_buffer[MAX*20];
-#endif
 // char receive_buffer1[MAX];
 // char receive_buffer2[MAX];
 
@@ -130,10 +125,6 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
 
         int bytes = 0;
 
-        uint8_t* partition_offset = partitioned_receive_buffer + ((device_id_y*NUM_TILES_X) + device_id_x)*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float);
-
-
-
         for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
         {      
             uint8_t* packet_ptr = client_packets.receive_device_data_ptrs[j].packet_ptr;
@@ -152,39 +143,47 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
 
             }
                             
-        }          
+        }   
 
+        int poll_condition = 1;       
 
-        bytes = recv( sockfd , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
-        //read(sockfd, receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
+        while(poll_condition == 1){
+            bytes = recv( sockfd , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
 
-        if(bytes > 0){
-        
-            int last_size = 0;
-            for (int i = 0; i < bytes; ++i)
-            {
-                
-                slip_state_next(slip_buffer, receive_buffer[i]);
-                if(slip_get_state() == PACKET_END){
-                    int decoded_size = slip_decode(slip_buffer, i+1 - last_size, decoded_buffer);
-                    slip_state_machine_init();
-                    int client_rx_id = ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1]);
+            if(bytes > 0)
+                printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
+            //read(sockfd, receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
+
+            if(bytes > 0){
+            
+                int last_size = 0;
+                for (int i = 0; i < bytes; ++i)
+                {
                     
-                    //memcpy(partitioned_receive_buffer + ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1])*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), decoded_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
-                    printf("Client %d %d received %d bytes from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2]);
-                    for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
-                    {
-                        if(client_packets.receive_device_data_ptrs[j].valid == 0){
-                            client_packets.receive_device_data_ptrs[j].packet_ptr = calloc(decoded_size, sizeof(uint8_t));
-                            memcpy(client_packets.receive_device_data_ptrs[j].packet_ptr, decoded_buffer, decoded_size);
-                            client_packets.receive_device_data_ptrs[j].receive_device_data_packet_size = decoded_size;
-                            client_packets.receive_device_data_packet_ctr[client_rx_id] ++;
-                            client_packets.receive_device_data_ptrs[j].valid = 1;
-                            break;
+                    slip_state_next(slip_buffer, receive_buffer[i]);
+                    if(slip_get_state() == PACKET_END){
+                        int decoded_size = slip_decode(slip_buffer, slip_data_index, decoded_buffer);
+                        slip_state_machine_init();
+                        int client_rx_id = ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1]);
+                        
+                        //memcpy(partitioned_receive_buffer + ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1])*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), decoded_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
+                        printf("Client %d %d received %d decoded packet bytes from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2]);
+                        for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+                        {
+                            if(client_packets.receive_device_data_ptrs[j].valid == 0){
+                                client_packets.receive_device_data_ptrs[j].packet_ptr = calloc(decoded_size, sizeof(uint8_t));
+                                memcpy(client_packets.receive_device_data_ptrs[j].packet_ptr, decoded_buffer, decoded_size);
+                                client_packets.receive_device_data_ptrs[j].receive_device_data_packet_size = decoded_size;
+                                client_packets.receive_device_data_packet_ctr[client_rx_id] ++;
+                                client_packets.receive_device_data_ptrs[j].valid = 1;
+                                break;
+                            }
                         }
+                        
+                        last_size = (i+1);
+                        if(i == (bytes - 1))
+                            poll_condition = 0;
                     }
-                    
-                    last_size = (i+1);
                 }
             }
         }

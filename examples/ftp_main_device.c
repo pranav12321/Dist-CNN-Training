@@ -307,13 +307,12 @@ int main_device(){
 
         printf("Backprop complete\n");
 
-            // if(DEVICE_ID_X == 0 && DEVICE_ID_Y == 0)
-            //     receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
-            // else{
-            // //#ifdef CLIENT
-            //     sync_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
-            // }
-            //#endif
+            if(DEVICE_ID_X == 0 && DEVICE_ID_Y == 0)
+                receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            else{
+            //#ifdef CLIENT
+                sync_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            }
 
 
 
@@ -542,6 +541,10 @@ int main_device(){
                 
             }
             printf("\n");
+
+
+            printf("Done\n");
+            while(1);
 
 
 
