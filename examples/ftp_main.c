@@ -1045,7 +1045,7 @@ int main_yolo(){
 
     network* net = calloc(1, sizeof(network));//SHARED_NETWORKS[i][j];
 
-    net->n = 25;
+    net->n = 5;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));

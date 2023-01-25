@@ -1262,7 +1262,7 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 }
 
 //TODO : Variable filter sizes
-#ifdef SERVER
+
 void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
 
     int total_weights = 0;
@@ -1390,11 +1390,10 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
 
 }
 
-#endif
 
 
 
-#ifdef CLIENT
+
 void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
 
     // float* data = malloc(net->n * net->layers[0].size * net->layers[0].size * sizeof(float));
@@ -1490,4 +1489,3 @@ void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
 
 }
 
-#endif

@@ -18,8 +18,8 @@ int main_device(){
 
     int NUM_TILES_X = 2;
     int NUM_TILES_Y = 2;
-    int INPUT_WIDTH = 300;
-    int INPUT_HEIGHT = 300;
+    int INPUT_WIDTH = 608;
+    int INPUT_HEIGHT = 608;
     int INPUT_CHANNELS = 3;
 
 
@@ -41,8 +41,8 @@ int main_device(){
     profile.fp[0].layer_end_idx = 4;
     profile.fp[0].start_x_forward = 0;
     profile.fp[0].start_y_forward = 0;
-    profile.fp[0].end_x_forward = 149;
-    profile.fp[0].end_y_forward = 149;
+    profile.fp[0].end_x_forward = 303;
+    profile.fp[0].end_y_forward = 303;
 
     // profile.fp[1].layer_start_idx = 4;
     // profile.fp[1].layer_end_idx = 5;
@@ -62,8 +62,8 @@ int main_device(){
     profile.bp[0].layer_end_idx = 4;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
-    profile.bp[0].end_x_backward = 149;
-    profile.bp[0].end_y_backward = 149;
+    profile.bp[0].end_x_backward = 303;
+    profile.bp[0].end_y_backward = 303;
 
     // profile.bp[1].layer_start_idx = 4;
     // profile.bp[1].layer_end_idx = 5;
@@ -107,7 +107,7 @@ int main_device(){
     fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 1, INPUT_IMAGE, 1);
 
     net->workspace = calloc(50000000, sizeof(float));
-    net->inputs = 10*INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y);
+    net->inputs = 3*INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y);
 
     for (int g = 0; g < profile.num_forward_groups; ++g)
     {
@@ -305,12 +305,15 @@ int main_device(){
 
     }
 
-            #ifdef SERVER
-                receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
-            #endif
-            #ifdef CLIENT
-                sync_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
-            #endif
+        printf("Backprop complete\n");
+
+            // if(DEVICE_ID_X == 0 && DEVICE_ID_Y == 0)
+            //     receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            // else{
+            // //#ifdef CLIENT
+            //     sync_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
+            // }
+            //#endif
 
 
 
