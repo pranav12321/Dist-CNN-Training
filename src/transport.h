@@ -14,8 +14,8 @@ void receive_boundry(float*, int, int, int);
 //#define SERVER 1
 #define CLIENT 1
 
-#define DEVICE_ID_X 1
-#define DEVICE_ID_Y 1
+#define DEVICE_ID_X 0
+#define DEVICE_ID_Y 0
 
 // #define NUM_TILES_X 2
 // #define NUM_TILES_Y 2
@@ -31,9 +31,10 @@ typedef struct rx_data_packet_ptrs{
 } rx_data_packet_ptrs;
 
 typedef struct client_structure{
+	uint8_t* receive_buffer;//[MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float)];
 	rx_data_packet_ptrs receive_device_data_ptrs[MAX_PACKETS_PER_DEVICE];
-	//TODO: TEMP const hardcoded
-	//int receive_device_data_packet_ctr[NUM_TILES_Y*NUM_TILES_X];
+	int socket_fd;
+	int endpoint_type;
 	int receive_device_data_packet_ctr[4];
 
 } client_structure;

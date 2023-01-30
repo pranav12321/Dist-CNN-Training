@@ -1038,6 +1038,8 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
 
 }
 
+#define LAYER_SIZE 608
+
 int main_yolo(){
     //make_convolutional_layer(int batch, int h,
     // int w, int c, int n, int groups, int size, int stride, int padding,
@@ -1052,11 +1054,11 @@ int main_yolo(){
     net->cost = calloc(1, sizeof(float));
 
     int filter_size = 3;
-    int num_layers = 8;
+    int num_layers = 5;
     int unit_boundry = 1;
 
     //yolo v2
-    net->layers[0] = make_convolutional_layer(1, 608, 608, 3, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[0] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 3, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     //(int batch, int h, int w, int c, int size, int stride, int padding)
     // net->layers[1] = make_maxpool_layer(1, 604/2, 604/2, 32, 2, 2, 0); 
     // net->layers[2] = make_convolutional_layer(1, 604/2, 604/2, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
@@ -1064,10 +1066,10 @@ int main_yolo(){
     // net->layers[4] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
 
-    net->layers[1] = make_convolutional_layer(1, 608, 608, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, 608, 608, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, 608, 608, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, 608, 608, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[3] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 12, 12, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     // net->layers[5] = make_convolutional_layer(1, 152/2, 152/2, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
     // net->layers[6] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 

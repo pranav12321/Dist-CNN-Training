@@ -31,6 +31,8 @@ int main_device(){
         init_transport();
     #endif
 
+    sleep(1);
+
     profile.num_forward_groups = 1;
     profile.num_backward_groups = 1;
 
@@ -44,19 +46,33 @@ int main_device(){
     profile.fp[0].end_x_forward = 303;
     profile.fp[0].end_y_forward = 303;
 
-    // profile.fp[1].layer_start_idx = 4;
-    // profile.fp[1].layer_end_idx = 5;
+    // profile.fp[1].layer_start_idx = 1;
+    // profile.fp[1].layer_end_idx = 1;
     // profile.fp[1].start_x_forward = 0;
     // profile.fp[1].start_y_forward = 0;
-    // profile.fp[1].end_x_forward = 2;
-    // profile.fp[1].end_y_forward = 2;
+    // profile.fp[1].end_x_forward = 303;
+    // profile.fp[1].end_y_forward = 303;
 
-    // profile.fp[2].layer_start_idx = 6;
-    // profile.fp[2].layer_end_idx = 7;
+    // profile.fp[2].layer_start_idx = 2;
+    // profile.fp[2].layer_end_idx = 2;
     // profile.fp[2].start_x_forward = 0;
     // profile.fp[2].start_y_forward = 0;
-    // profile.fp[2].end_x_forward = 2;
-    // profile.fp[2].end_y_forward = 2;
+    // profile.fp[2].end_x_forward = 303;
+    // profile.fp[2].end_y_forward = 303;
+
+    // profile.fp[3].layer_start_idx = 3;
+    // profile.fp[3].layer_end_idx = 3;
+    // profile.fp[3].start_x_forward = 0;
+    // profile.fp[3].start_y_forward = 0;
+    // profile.fp[3].end_x_forward = 303;
+    // profile.fp[3].end_y_forward = 303;
+
+    // profile.fp[4].layer_start_idx = 4;
+    // profile.fp[4].layer_end_idx = 4;
+    // profile.fp[4].start_x_forward = 0;
+    // profile.fp[4].start_y_forward = 0;
+    // profile.fp[4].end_x_forward = 303;
+    // profile.fp[4].end_y_forward = 303;
 
     profile.bp[0].layer_start_idx = 0;
     profile.bp[0].layer_end_idx = 4;

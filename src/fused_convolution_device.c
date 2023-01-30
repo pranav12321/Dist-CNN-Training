@@ -1360,9 +1360,10 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
                     layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
                 }
                // printf("\n\n\n\n");
+               send_boundry(data, total_weights, j, i);
             }
 
-            send_boundry(data, total_weights, j, i);
+            
         }
     }
 

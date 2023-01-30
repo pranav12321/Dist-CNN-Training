@@ -49,46 +49,146 @@ slip_states slip_get_state();
 
 
 
-client_structure client_packets;
+client_structure* network_links[NUM_TILES_X*NUM_TILES_Y];
+
+void get_device_ip(int device_id_x, int device_id_y, char* ip){
+    if(device_id_x == 0 && device_id_y == 0){
+        strcpy(ip, "127.0.0.1");
+    }
+    else if(device_id_x == 1 && device_id_y == 0){
+        strcpy(ip, "127.0.0.1");
+    }
+    else if(device_id_x == 0 && device_id_y == 1){
+        strcpy(ip, "127.0.0.1");
+    }
+    else if(device_id_x == 1 && device_id_y == 1){
+        strcpy(ip, "127.0.0.1");
+    }
+}
 
 void init_transport(){
 
- int connfd;
     struct sockaddr_in servaddr, cli;
+    int sockfd, connfd, len;
  
-    // socket create and verification
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1) {
-        printf("socket creation failed...\n");
-        exit(0);
-    }
-    else
-        printf("Socket successfully created..\n");
 
-    bzero(&servaddr, sizeof(servaddr));
- 
-    // assign IP, PORT
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servaddr.sin_port = htons(PORT);
- 
-    // connect the client socket to server socket
-    if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
-        != 0) {
-        printf("connection with the server failed...\n");
-        exit(0);
-    }
-    else
-        printf("connected to the server..\n");
+    //SERVER ENDPOINTS
 
-
-    int flags = fcntl(sockfd, F_GETFL, 0);
-    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
-
-    for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+     for (int i = (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y + 1) ; i < (NUM_TILES_X*NUM_TILES_Y); ++i)
     {
-        client_packets.receive_device_data_ptrs[j].valid = 0;
+        client_structure* cs = calloc(1, sizeof(client_structure));
+        cs->receive_buffer = calloc(MAX_BOUNDARY_SIZE_PER_DEVICE*3, sizeof(float));
+        network_links[i] = cs;
+        cs->endpoint_type = 1;
+
+
+        // socket create and verification
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == -1) {
+            printf("socket creation failed...\n");
+            exit(0);
+        }
+        else
+            printf("Socket successfully created..\n");
+        bzero(&servaddr, sizeof(servaddr));
+
+        // assign IP, PORT
+        servaddr.sin_family = AF_INET;
+        servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        servaddr.sin_port = htons(PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
+
+        // Binding newly created socket to given IP and verification
+        if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
+            printf("socket bind failed...\n");
+            exit(0);
+        }
+        else
+            printf("Socket successfully binded..\n");
+
+        // Now server is ready to listen and verification
+        if ((listen(sockfd, 5)) != 0) {
+            printf("Listen failed...\n");
+            exit(0);
+        }
+        else
+            printf("Server listening for client %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
+        len = sizeof(cli);
+
+        // Accept the data packet from client and verification
+        connfd = accept(sockfd, (SA*)&cli, &len);
+        if (connfd < 0) {
+            printf("server accept failed...\n");
+            exit(0);
+        }
+        else
+            printf("server %d %d successfully accepted the client %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
+
+        cs->socket_fd = connfd;
+        cs->endpoint_type = 1;
+
+        for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+        {
+            cs->receive_device_data_ptrs[j].valid = 0;
+        }
+
+
+    }   
+
+
+    //CLIENT ENDPOINTS
+    char ip[15];
+    get_device_ip(DEVICE_ID_X, DEVICE_ID_Y, ip);
+    for (int i = (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y - 1); i >= 0 ; --i)
+    {
+        client_structure* cs = calloc(1, sizeof(client_structure));
+        cs->receive_buffer = calloc(MAX_BOUNDARY_SIZE_PER_DEVICE, sizeof(uint8_t));
+        network_links[i] = cs;
+        cs->endpoint_type = 0;
+
+        // socket create and verification
+
+        int sockfd = -1;
+        while(sockfd == -1){
+            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockfd == -1) {
+                // printf("socket creation failed...\n");
+                // exit(0);
+            }
+            else
+                printf("Socket successfully created\n");
+        }
+        bzero(&servaddr, sizeof(servaddr));
+     
+        // assign IP, PORT
+        servaddr.sin_family = AF_INET;
+        servaddr.sin_addr.s_addr = inet_addr(ip);
+        servaddr.sin_port = htons(PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
+
+        printf("Attempting to connect to server %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
+     
+        // connect the client socket to server socket
+        while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
+            != 0) {
+            //printf("connection with the server failed...\n");
+            //exit(0);
+        }
+        //else
+        printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
+
+
+        int flags = fcntl(sockfd, F_GETFL, 0);
+        fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+        cs->socket_fd = sockfd;
+        cs->endpoint_type = 0;
+
+        for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+        {
+            cs->receive_device_data_ptrs[j].valid = 0;
+        }
     }
+
+
 
     slip_state_machine_init();
 
@@ -106,49 +206,43 @@ void send_boundry(float* data, int size, int device_id_x, int device_id_y){
     transmit_buffer[4] = device_id_y;
     memcpy(transmit_buffer+5, data, size*(sizeof(float)));
 
-#ifdef SERVER 
-    int dst_client_id = NUM_TILES_X*device_id_y + device_id_x - 1;
-    int encoded_size = slip_encode(transmit_buffer, size*(sizeof(float)) + 5, encoded_buffer);
-    printf("Server sending %d bytes to device %d %d\n", encoded_size, transmit_buffer[3], transmit_buffer[4]);
-    write(client_socket[dst_client_id], encoded_buffer, encoded_size);
-#else
     int encoded_size = slip_encode(transmit_buffer, size*(sizeof(float)) + 5, encoded_buffer);
     printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, encoded_size, transmit_buffer[3], transmit_buffer[4]);
-    write(sockfd, encoded_buffer, encoded_size);
-#endif
+    write(network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd, encoded_buffer, encoded_size);
+
 }
 
 
 void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
 
-    while(1){
+   // while(1){
 
         int bytes = 0;
 
-        for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
-        {      
-            uint8_t* packet_ptr = client_packets.receive_device_data_ptrs[j].packet_ptr;
-            if(client_packets.receive_device_data_ptrs[j].valid == 1 
-                && packet_ptr[0] == 1 
-                && (packet_ptr[1] == device_id_x) 
-                && (packet_ptr[2] == device_id_y) 
-                && (packet_ptr[3] == DEVICE_ID_X)
-                && (packet_ptr[4] == DEVICE_ID_Y) ){
+        // for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+        // {      
+        //     uint8_t* packet_ptr = client_packets.receive_device_data_ptrs[j].packet_ptr;
+        //     if(client_packets.receive_device_data_ptrs[j].valid == 1 
+        //         && packet_ptr[0] == 1 
+        //         && (packet_ptr[1] == device_id_x) 
+        //         && (packet_ptr[2] == device_id_y) 
+        //         && (packet_ptr[3] == DEVICE_ID_X)
+        //         && (packet_ptr[4] == DEVICE_ID_Y) ){
 
-                memcpy(data, packet_ptr+5, size*sizeof(float));
-                packet_ptr[0] = 0;
-                client_packets.receive_device_data_ptrs[j].valid = 0;
-                free(packet_ptr);
-                return;// success
+        //         memcpy(data, packet_ptr+5, size*sizeof(float));
+        //         packet_ptr[0] = 0;
+        //         client_packets.receive_device_data_ptrs[j].valid = 0;
+        //         free(packet_ptr);
+        //         return;// success
 
-            }
+        //     }
                             
-        }   
+        // }   
 
         int poll_condition = 1;       
 
         while(poll_condition == 1){
-            bytes = recv( sockfd , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
+            bytes = recv( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd , network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
 
             if(bytes > 0)
                 printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
@@ -160,7 +254,7 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
                 for (int i = 0; i < bytes; ++i)
                 {
                     
-                    slip_state_next(slip_buffer, receive_buffer[i]);
+                    slip_state_next(slip_buffer, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer[i]);
                     if(slip_get_state() == PACKET_END){
                         int decoded_size = slip_decode(slip_buffer, slip_data_index, decoded_buffer);
                         slip_state_machine_init();
@@ -168,27 +262,30 @@ void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
                         
                         //memcpy(partitioned_receive_buffer + ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1])*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), decoded_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
                         printf("Client %d %d received %d decoded packet bytes from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2]);
-                        for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
-                        {
-                            if(client_packets.receive_device_data_ptrs[j].valid == 0){
-                                client_packets.receive_device_data_ptrs[j].packet_ptr = calloc(decoded_size, sizeof(uint8_t));
-                                memcpy(client_packets.receive_device_data_ptrs[j].packet_ptr, decoded_buffer, decoded_size);
-                                client_packets.receive_device_data_ptrs[j].receive_device_data_packet_size = decoded_size;
-                                client_packets.receive_device_data_packet_ctr[client_rx_id] ++;
-                                client_packets.receive_device_data_ptrs[j].valid = 1;
-                                break;
-                            }
-                        }
+                        memcpy(data, decoded_buffer+5, size*sizeof(float));
+                        // for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
+                        // {
+                        //     if(client_packets.receive_device_data_ptrs[j].valid == 0){
+                        //         client_packets.receive_device_data_ptrs[j].packet_ptr = calloc(decoded_size, sizeof(uint8_t));
+                        //         memcpy(client_packets.receive_device_data_ptrs[j].packet_ptr, decoded_buffer, decoded_size);
+                        //         client_packets.receive_device_data_ptrs[j].receive_device_data_packet_size = decoded_size;
+                        //         client_packets.receive_device_data_packet_ctr[client_rx_id] ++;
+                        //         client_packets.receive_device_data_ptrs[j].valid = 1;
+                        //         break;
+                        //     }
+                        // }
                         
                         last_size = (i+1);
-                        if(i == (bytes - 1))
-                            poll_condition = 0;
+                        poll_condition = 0;
+                        // if(i == (bytes - 1))
+                        //     poll_condition = 0;
                     }
                 }
             }
+            // poll_condition = 1;
         }
 
-    }
+    //}
 
 }
 
