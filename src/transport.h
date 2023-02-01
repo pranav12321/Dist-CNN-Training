@@ -33,11 +33,22 @@ typedef struct rx_data_packet_ptrs{
 typedef struct client_structure{
 	uint8_t* receive_buffer;//[MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float)];
 	rx_data_packet_ptrs receive_device_data_ptrs[MAX_PACKETS_PER_DEVICE];
-	int socket_fd;
+	int socket_fd[2];
 	int endpoint_type;
 	int receive_device_data_packet_ctr[4];
 
 } client_structure;
+
+typedef struct comm_entry{
+	uint8_t* data;
+	int device_id_x;
+	int device_id_y;
+	int size; 
+	int valid;
+	int intent_to_read;
+	int has_been_read;
+	int ack_received;
+} comm_entry;
 
 
 #endif

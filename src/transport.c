@@ -20,33 +20,15 @@
 
 #define NUM_TILES_X 2
 #define NUM_TILES_Y 2
-  
-int sockfd, connfd;
 
-char transmit_buffer[MAX*5];
-char receive_buffer[MAX*5];
-char slip_buffer[MAX*4 + 2];
-char decoded_buffer[MAX*4 + 2];
-char encoded_buffer[MAX*4 + 2];
+int z;
+int o;
+int t;
+int tt;
 
-// char receive_buffer1[MAX];
-// char receive_buffer2[MAX];
 
-typedef enum
-{
-    WAITING_FOR_START,
-    PACKET_END,
-    PACKET_DATA,
-} slip_states;
-
-int slip_data_index = 0;
-slip_states current_state;
-
-static uint32_t slip_encode(uint8_t* buffer, uint32_t size, uint8_t* encodedBuffer);
-static uint32_t slip_decode(uint8_t* encodedBuffer, uint32_t size, uint8_t* decodedBuffer);
-void slip_state_next(uint8_t* rx_packet, uint8_t data);
-slip_states slip_get_state();
-
+void* send_boundry_thread(void *vargp);
+void* receive_boundry_thread(void *vargp);
 
 
 client_structure* network_links[NUM_TILES_X*NUM_TILES_Y];
@@ -81,50 +63,51 @@ void init_transport(){
         network_links[i] = cs;
         cs->endpoint_type = 1;
 
+        for(int j = 0; j < 2; j++){
+            // socket create and verification
+            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockfd == -1) {
+                printf("socket creation failed...\n");
+                exit(0);
+            }
+            else
+                printf("Socket successfully created..\n");
+            bzero(&servaddr, sizeof(servaddr));
 
-        // socket create and verification
-        sockfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (sockfd == -1) {
-            printf("socket creation failed...\n");
-            exit(0);
+            // assign IP, PORT
+            servaddr.sin_family = AF_INET;
+            servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            servaddr.sin_port = htons(PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i + 100*j);
+
+            // Binding newly created socket to given IP and verification
+            if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
+                printf("socket bind failed...\n");
+                exit(0);
+            }
+            else
+                printf("Socket successfully binded..\n");
+
+            // Now server is ready to listen and verification
+            if ((listen(sockfd, 5)) != 0) {
+                printf("Listen failed...\n");
+                exit(0);
+            }
+            else
+                printf("Server listening for client %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
+            len = sizeof(cli);
+
+            // Accept the data packet from client and verification
+            connfd = accept(sockfd, (SA*)&cli, &len);
+            if (connfd < 0) {
+                printf("server accept failed...\n");
+                exit(0);
+            }
+            else
+                printf("server %d %d successfully accepted the client %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i + j*100);
+
+            cs->socket_fd[j] = connfd;
+            cs->endpoint_type = 1;
         }
-        else
-            printf("Socket successfully created..\n");
-        bzero(&servaddr, sizeof(servaddr));
-
-        // assign IP, PORT
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        servaddr.sin_port = htons(PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
-
-        // Binding newly created socket to given IP and verification
-        if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
-            printf("socket bind failed...\n");
-            exit(0);
-        }
-        else
-            printf("Socket successfully binded..\n");
-
-        // Now server is ready to listen and verification
-        if ((listen(sockfd, 5)) != 0) {
-            printf("Listen failed...\n");
-            exit(0);
-        }
-        else
-            printf("Server listening for client %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
-        len = sizeof(cli);
-
-        // Accept the data packet from client and verification
-        connfd = accept(sockfd, (SA*)&cli, &len);
-        if (connfd < 0) {
-            printf("server accept failed...\n");
-            exit(0);
-        }
-        else
-            printf("server %d %d successfully accepted the client %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 4*(DEVICE_ID_X) + 8*(DEVICE_ID_Y) + i);
-
-        cs->socket_fd = connfd;
-        cs->endpoint_type = 1;
 
         for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
         {
@@ -137,7 +120,7 @@ void init_transport(){
 
     //CLIENT ENDPOINTS
     char ip[15];
-    get_device_ip(DEVICE_ID_X, DEVICE_ID_Y, ip);
+    
     for (int i = (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y - 1); i >= 0 ; --i)
     {
         client_structure* cs = calloc(1, sizeof(client_structure));
@@ -145,323 +128,246 @@ void init_transport(){
         network_links[i] = cs;
         cs->endpoint_type = 0;
 
+        get_device_ip(i%NUM_TILES_X, i/NUM_TILES_X, ip);
         // socket create and verification
 
-        int sockfd = -1;
-        while(sockfd == -1){
-            sockfd = socket(AF_INET, SOCK_STREAM, 0);
-            if (sockfd == -1) {
-                // printf("socket creation failed...\n");
-                // exit(0);
+        for (int j = 0; j < 2; ++j)
+        {
+            int sockfd = -1;
+            while(sockfd == -1){
+                sockfd = socket(AF_INET, SOCK_STREAM, 0);
+                if (sockfd == -1) {
+                    // printf("socket creation failed...\n");
+                    // exit(0);
+                }
+                else
+                    printf("Socket successfully created\n");
             }
-            else
-                printf("Socket successfully created\n");
+            bzero(&servaddr, sizeof(servaddr));
+         
+            // assign IP, PORT
+            servaddr.sin_family = AF_INET;
+            servaddr.sin_addr.s_addr = inet_addr(ip);
+            servaddr.sin_port = htons(PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*100);
+
+            printf("Attempting to connect to server %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*100);
+         
+            // connect the client socket to server socket
+            while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
+                != 0) {
+                //printf("connection with the server failed...\n");
+                //exit(0);
+            }
+            //else
+            printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
+
+
+            int flags = fcntl(sockfd, F_GETFL, 0);
+            fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+            cs->socket_fd[j] = sockfd;
+            cs->endpoint_type = 0;
         }
-        bzero(&servaddr, sizeof(servaddr));
-     
-        // assign IP, PORT
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_addr.s_addr = inet_addr(ip);
-        servaddr.sin_port = htons(PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
-
-        printf("Attempting to connect to server %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
-     
-        // connect the client socket to server socket
-        while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
-            != 0) {
-            //printf("connection with the server failed...\n");
-            //exit(0);
-        }
-        //else
-        printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + 8*((i>>1) & 0x1) + 4*(i & 0x1) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y));
-
-
-        int flags = fcntl(sockfd, F_GETFL, 0);
-        fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
-
-        cs->socket_fd = sockfd;
-        cs->endpoint_type = 0;
 
         for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
         {
             cs->receive_device_data_ptrs[j].valid = 0;
         }
     }
+    
+    pthread_t send_thread0, send_thread1, send_thread2, send_thread3;
+    pthread_t receive_thread0, receive_thread1, receive_thread2, receive_thread3;
 
 
+    z = 0;
+    o = 1;
+    t = 2;
+    tt = 3;
 
-    slip_state_machine_init();
+    pthread_create(&send_thread0, NULL, send_boundry_thread, (void*)(&z));
+    pthread_create(&receive_thread0, NULL, receive_boundry_thread, (void*)(&z));
+
+    pthread_create(&send_thread1, NULL, send_boundry_thread, (void*)(&o));
+    pthread_create(&receive_thread1, NULL, receive_boundry_thread, (void*)(&o));
+
+    pthread_create(&send_thread2, NULL, send_boundry_thread, (void*)(&t));
+    pthread_create(&receive_thread2, NULL, receive_boundry_thread, (void*)(&t));
+
+    pthread_create(&send_thread3, NULL, send_boundry_thread, (void*)(&tt));
+    pthread_create(&receive_thread3, NULL, receive_boundry_thread, (void*)(&tt));
 
 }
 
+#define MAX_PACKET_ELEMENTS 300
+#define ACK_SIZE 9
+char* ack = "RECEIVED";
 
 
+comm_entry transmit_entries[NUM_TILES_X*NUM_TILES_Y];
+comm_entry receive_entries[NUM_TILES_X*NUM_TILES_Y];
 
 
 void send_boundry(float* data, int size, int device_id_x, int device_id_y){
-    transmit_buffer[0] = 1;
-    transmit_buffer[1] = DEVICE_ID_X;
-    transmit_buffer[2] = DEVICE_ID_Y;
-    transmit_buffer[3] = device_id_x;
-    transmit_buffer[4] = device_id_y;
-    memcpy(transmit_buffer+5, data, size*(sizeof(float)));
 
-    int encoded_size = slip_encode(transmit_buffer, size*(sizeof(float)) + 5, encoded_buffer);
-    printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, encoded_size, transmit_buffer[3], transmit_buffer[4]);
-    write(network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd, encoded_buffer, encoded_size);
+    int idx = device_id_y*NUM_TILES_X + device_id_x;
+
+    while(transmit_entries[idx].valid == 1);
+    transmit_entries[idx].data = data;
+    transmit_entries[idx].size = size;
+    transmit_entries[idx].valid = 1;
 
 }
-
 
 void receive_boundry(float* data, int size, int device_id_x, int device_id_y){
 
-   // while(1){
+    int idx = device_id_y*NUM_TILES_X + device_id_x;
 
-        int bytes = 0;
+    receive_entries[idx].data = data;
+    receive_entries[idx].valid = 0;
+    receive_entries[idx].size = size;
+    receive_entries[idx].intent_to_read = 1;
 
-        // for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
-        // {      
-        //     uint8_t* packet_ptr = client_packets.receive_device_data_ptrs[j].packet_ptr;
-        //     if(client_packets.receive_device_data_ptrs[j].valid == 1 
-        //         && packet_ptr[0] == 1 
-        //         && (packet_ptr[1] == device_id_x) 
-        //         && (packet_ptr[2] == device_id_y) 
-        //         && (packet_ptr[3] == DEVICE_ID_X)
-        //         && (packet_ptr[4] == DEVICE_ID_Y) ){
+    while(receive_entries[idx].valid == 0);
 
-        //         memcpy(data, packet_ptr+5, size*sizeof(float));
-        //         packet_ptr[0] = 0;
-        //         client_packets.receive_device_data_ptrs[j].valid = 0;
-        //         free(packet_ptr);
-        //         return;// success
+    receive_entries[idx].intent_to_read = 0;
+    receive_entries[idx].valid = 0;
 
-        //     }
-                            
-        // }   
+    //TODO: Make sure sizes match here
 
-        int poll_condition = 1;       
+    //memcpy(data, receive_entries[idx].data, size*(sizeof(float)));
+    //free(receive_entries[idx].data);
 
-        while(poll_condition == 1){
-            bytes = recv( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd , network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
 
-            if(bytes > 0)
-                printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
-            //read(sockfd, receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
 
-            if(bytes > 0){
-            
-                int last_size = 0;
-                for (int i = 0; i < bytes; ++i)
-                {
-                    
-                    slip_state_next(slip_buffer, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer[i]);
-                    if(slip_get_state() == PACKET_END){
-                        int decoded_size = slip_decode(slip_buffer, slip_data_index, decoded_buffer);
-                        slip_state_machine_init();
-                        int client_rx_id = ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1]);
-                        
-                        //memcpy(partitioned_receive_buffer + ((decoded_buffer[2]*NUM_TILES_X) + decoded_buffer[1])*MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), decoded_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
-                        printf("Client %d %d received %d decoded packet bytes from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, decoded_size, decoded_buffer[1], decoded_buffer[2]);
-                        memcpy(data, decoded_buffer+5, size*sizeof(float));
-                        // for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
-                        // {
-                        //     if(client_packets.receive_device_data_ptrs[j].valid == 0){
-                        //         client_packets.receive_device_data_ptrs[j].packet_ptr = calloc(decoded_size, sizeof(uint8_t));
-                        //         memcpy(client_packets.receive_device_data_ptrs[j].packet_ptr, decoded_buffer, decoded_size);
-                        //         client_packets.receive_device_data_ptrs[j].receive_device_data_packet_size = decoded_size;
-                        //         client_packets.receive_device_data_packet_ctr[client_rx_id] ++;
-                        //         client_packets.receive_device_data_ptrs[j].valid = 1;
-                        //         break;
-                        //     }
-                        // }
-                        
-                        last_size = (i+1);
-                        poll_condition = 0;
-                        // if(i == (bytes - 1))
-                        //     poll_condition = 0;
+}
+
+
+void* send_boundry_thread(void *vargp){
+
+    int i = *((int*)(vargp));
+
+    int device_id_x = (i%NUM_TILES_X);
+    int device_id_y = (i/NUM_TILES_X);
+
+    while(1){
+         
+        if((device_id_x != DEVICE_ID_X) || (device_id_y != DEVICE_ID_Y)){
+            while((transmit_entries[i].valid) == 0){}
+        }
+
+        if(transmit_entries[i].valid == 1){
+            printf("Client %d %d ready to be sent to\n", i%NUM_TILES_X, i/NUM_TILES_X);
+
+            int size = transmit_entries[i].size;
+            float* data = transmit_entries[i].data;
+
+            int num_transactions = (size/MAX_PACKET_ELEMENTS + ((size%MAX_PACKET_ELEMENTS > 0) ? 1 : 0) );
+            int cumulative_sent_size = 0;
+            char ack[15];
+
+
+            while(size > 0){
+                int transaction_size = (size > MAX_PACKET_ELEMENTS ? MAX_PACKET_ELEMENTS : size);
+
+                //*((int*)(transmit_buffer)) = transaction_size*sizeof(float);
+
+                //memcpy(transmit_buffer, data + cumulative_sent_size, transaction_size*(sizeof(float)));
+
+                printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, transaction_size*(sizeof(float)), device_id_x, device_id_y);
+
+                int to_send = 0;
+
+                to_send = write(network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[0], data + cumulative_sent_size, transaction_size*sizeof(float));
+
+                if(to_send < (transaction_size*sizeof(float))){
+                    printf("SEND FAILURE: Expected %d Actual : %d \n\n", transaction_size*sizeof(float), to_send);
+                    exit(0);
+                }
+
+                printf("Client %d %d waiting for ack from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y);
+
+                int bytes = 0;
+
+                while(bytes < 9){
+                    int temp = read( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[1] , network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
+                    if(temp > 0)
+                        bytes += temp;
+                }
+
+                printf("Client %d %d received ack from device %d %d size = %d %s\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y, bytes, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer);
+
+                cumulative_sent_size += transaction_size;
+                size -= transaction_size;
+            }
+
+            transmit_entries[i].valid = 0;
+
+        }
+    }
+}
+
+
+void* receive_boundry_thread(void* vargp){
+
+    int j = *((int*)(vargp));
+
+    int device_id_x = j%NUM_TILES_X;
+    int device_id_y = j/NUM_TILES_X;
+
+    while(1){
+
+        if((device_id_x != DEVICE_ID_X) || (device_id_y != DEVICE_ID_Y)){
+            while((receive_entries[j].intent_to_read) == 0){}
+        }
+ 
+        if(receive_entries[j].intent_to_read == 1){ 
+            printf("Client %d %d ready to receive from\n", j%NUM_TILES_X, j/NUM_TILES_X);
+
+            int size = (receive_entries[j].size)*sizeof(float);
+            int num_transactions = (size/MAX_PACKET_ELEMENTS + ((size%MAX_PACKET_ELEMENTS > 0) ? 1 : 0) );
+            int cumulative_received_size = 0;
+            //receive_entries[j].data = calloc(size, sizeof(float));
+            uint8_t* data = (uint8_t*)receive_entries[j].data;
+            char ack[15];
+
+            while(size > 0){
+
+                int transaction_size = (size > (MAX_PACKET_ELEMENTS*4) ? (MAX_PACKET_ELEMENTS*4) : size);
+                int temp = transaction_size;
+                //transaction_size *= sizeof(float);
+
+                printf("Size: %d Transaction size: %d\n", size, transaction_size);
+
+                while(transaction_size > 0){
+
+                    int bytes = recv( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[0] , network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
+
+                    if(bytes > 0)
+                        printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
+
+                    if(bytes > 0){     
+                        memcpy(data + cumulative_received_size, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, transaction_size);
+                        cumulative_received_size += bytes;
+                        transaction_size -= bytes;
                     }
                 }
+
+                size -= temp;
+                printf("%s\n", "send ACK");
+
+                int to_send = 0;
+                
+                to_send = write(network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[1], "Received", ACK_SIZE);
+                if(to_send < (ACK_SIZE)){
+                    printf("SEND FAILURE: Expected %d Actual : %d \n\n", ACK_SIZE, to_send);
+                    exit(0);
+                }
+            
             }
-            // poll_condition = 1;
+
+            receive_entries[j].valid = 1;
+
+            sleep(1);
         }
-
-    //}
-
-}
-
-
-//FORMAT
-//BYTE 0 - VALID
-//BYTE 1 - SRC X 
-//BYTE 2 - SRC Y
-//BYTE 3 - DST X
-//BYTE 4 - DST Y
-
-
-
-/// \brief Key constants used in the SLIP protocol.
-enum
-{
-    /// \brief The decimal END character (octal 0300).
-    ///
-    /// Indicates the end of a packet.
-    END = 192, 
-
-    /// \brief The decimal ESC character (octal 0333).
-    ///
-    /// Indicates byte stuffing.
-    ESC = 219,
-
-    /// \brief The decimal ESC_END character (octal 0334).
-    ///
-    /// ESC ESC_END means END data byte.
-    ESC_END = 220,
-
-    /// \brief The decimal ESC_ESC character (ocatal 0335).
-    ///
-    /// ESC ESC_ESC means ESC data byte.
-    ESC_ESC = 221
-};
-
-/// \brief Get the maximum encoded buffer size for an unencoded buffer size.
-///
-/// SLIP has a start and end markers (192 and 219). Marker value is
-/// replaced by 2 bytes in the encoded buffer. So in the worst case of
-/// sending a buffer with only '192' or '219', the encoded buffer length
-/// will be 2 * buffer.size() + 2.
-///
-/// \param unencodedBufferSize The size of the buffer to be encoded.
-/// \returns the maximum size of the required encoded buffer.
-static size_t getEncodedBufferSize(size_t unencodedBufferSize)
-{
-    return unencodedBufferSize * 2 + 2;
-}
-
-void slip_state_machine_init(){
-    current_state = WAITING_FOR_START;
-    slip_data_index = 0;
-}
-
-#define END 192
-#define ESC 219
-#define ESC_END 220
-#define ESC_ESC 221
-
-void slip_state_next(uint8_t* rx_packet, uint8_t data){
-    switch (current_state){
-
-        case WAITING_FOR_START:
-            if(data == END){
-                rx_packet[slip_data_index++] = data;
-                current_state = PACKET_DATA;
-            }
-            break;
-        case PACKET_DATA:
-            rx_packet[slip_data_index++] = data;
-            if(data == END){
-                current_state = PACKET_END;
-                //TODO: Check for buffer overflow
-                //here and reset the machine in that case. Clearly it 
-                //indicates invalid/bad data if it exceeds the max 
-                //packet size to overflow the buffer
-            }
-            break;
-        case PACKET_END:
-            break;
-
     }
 }
-
-slip_states slip_get_state(){
- return current_state;
-}
-
-//Acknowledgement
-// https://github.com/bakercp/PacketSerial/blob/master/s
-// rc/Encoding/SLIP.h (encode modified sligtly from 
-// original source to include the 192 sentinel byte at 
-// both start and end of packet. Helps in easier and 
-// more robust packet receiving on receiver through slip 
-// state machine)
-static uint32_t slip_encode(uint8_t* buffer, uint32_t size, uint8_t* encodedBuffer)
-{
-    if (size == 0)
-        return 0;
-
-    uint32_t read_index = 0;
-    uint32_t write_index = 0;
-
-    // Double-ENDed, flush any data that may have accumulated due to line noise.
-    
-    encodedBuffer[write_index++] = END;
-
-    while (read_index < size)
-    {
-        if(buffer[read_index] == END)
-        {
-            encodedBuffer[write_index++] = ESC;
-            encodedBuffer[write_index++] = ESC_END;
-            read_index++;
-        }
-        else if(buffer[read_index] == ESC)
-        {
-            encodedBuffer[write_index++] = ESC;
-            encodedBuffer[write_index++] = ESC_ESC;
-            read_index++;
-        }
-        else
-        {
-            encodedBuffer[write_index++] = buffer[read_index++];
-        }
-    }
-    encodedBuffer[write_index++] = END;
-    return write_index;
-}
-
-
-/// \brief Decode a SLIP-encoded buffer.
-/// \param encodedBuffer A pointer to the \p encodedBuffer to decode.
-/// \param size The number of bytes in the \p encodedBuffer.
-/// \param decodedBuffer The target buffer for the decoded bytes.
-/// \returns The number of bytes written to the \p decodedBuffer.
-/// \warning decodedBuffer must have a minimum capacity of size.
-static uint32_t slip_decode(uint8_t* encodedBuffer, uint32_t size, uint8_t* decodedBuffer)
-{
-    if (size == 0)
-        return 0;
-
-    uint32_t read_index = 0;
-    uint32_t write_index = 0;
-
-    while (read_index < size)
-    {
-        if (encodedBuffer[read_index] == END)
-        {
-            // flush or done
-            read_index++;
-        }
-        else if (encodedBuffer[read_index] == ESC)
-        {
-            if (encodedBuffer[read_index+1] == ESC_END)
-            {
-                decodedBuffer[write_index++] = END;
-                read_index += 2;
-            }
-            else if (encodedBuffer[read_index+1] == ESC_ESC)
-            {
-                decodedBuffer[write_index++] = ESC;
-                read_index += 2;
-            }
-            else
-            {
-                // This case is considered a protocol violation.
-            }
-        }
-        else
-        {
-            decodedBuffer[write_index++] = encodedBuffer[read_index++];
-        }
-    }
-    return write_index;
-}
-

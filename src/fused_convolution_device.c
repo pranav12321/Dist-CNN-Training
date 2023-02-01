@@ -300,7 +300,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
        
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
-        free(transmit_data);
+       // free(transmit_data);
     }
 
     //SEND BOTTOM
@@ -322,7 +322,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
        
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
-        free(transmit_data);
+        //free(transmit_data);
 
     }
 
@@ -348,7 +348,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
         //printf("\n");
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
-        free(transmit_data);
+        //free(transmit_data);
 
     }
 
@@ -376,7 +376,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
 
         //printf("\n");      
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
-        free(transmit_data);
+        //free(transmit_data);
 
     }
 
@@ -398,7 +398,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
     
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
-        free(transmit_data);
+        //free(transmit_data);
 
     }
 
@@ -421,7 +421,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
    
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
-        free(transmit_data);
+        //free(transmit_data);
     }
 
     //SEND BOTTOM LEFT
@@ -441,7 +441,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
             }       
         } 
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
-        free(transmit_data);
+        //free(transmit_data);
     }
 
     //SEND BOTTOM RIGHT
@@ -462,7 +462,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
         }
       
         send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
-        free(transmit_data);
+        //free(transmit_data);
     }
 
 
@@ -602,6 +602,32 @@ void assemble_forward_group_data_device(network* net,
             }
         }
 
+        // //Top left
+        if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+            float* boundry_top_left;
+            get_forward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_top_left, 
+                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
+                device_id_x-1, device_id_y-1,
+                device_id_x, device_id_y);
+
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < top_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < left_boundry_edges; ++j)
+                    {
+                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + j] = boundry_top_left[(c*top_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                    }
+                }
+            }
+            free(boundry_top_left);
+        }
+
+
         //Top
         if(top_boundry_edges > 0){
             //receive top edges
@@ -629,7 +655,31 @@ void assemble_forward_group_data_device(network* net,
             free(boundry_top);
         } 
 
+        // //Top right
+        if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
+            float* boundry_top_right;
+            get_forward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_top_right, 
+                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
+                device_id_x+1, device_id_y-1,
+                device_id_x, device_id_y);
 
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
+            
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < top_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < right_boundry_edges; ++j)
+                    {
+                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                    }
+                }
+            }
+            free(boundry_top_right);
+        }
 
         //Left
         if(left_boundry_edges > 0){
@@ -658,33 +708,7 @@ void assemble_forward_group_data_device(network* net,
             }
             free(boundry_left);
         } 
-        // //Bottom 
-        if(bottom_boundry_edges > 0){
-            //receive bottom edges
-            float* boundry_bottom;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_bottom, 
-                bottom_boundry_edges, tile_input_width_original, depth, TOP, 
-                device_id_x, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
-
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < tile_input_width_original; ++j)
-                    {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+bottom_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
-                    }
-                }
-            }
-            free(boundry_bottom);
-        }   
         // //Right
         if(right_boundry_edges > 0){
             //receive right edges
@@ -712,56 +736,6 @@ void assemble_forward_group_data_device(network* net,
             }
             free(boundry_right);
         } 
-        // //Top left
-        if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
-
-            float* boundry_top_left;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_top_left, 
-                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
-                device_id_x-1, device_id_y-1,
-                device_id_x, device_id_y);
-
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < top_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < left_boundry_edges; ++j)
-                    {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + j] = boundry_top_left[(c*top_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
-                    }
-                }
-            }
-            free(boundry_top_left);
-        }
-
-        // //Top right
-        if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
-            float* boundry_top_right;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_top_right, 
-                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
-                device_id_x+1, device_id_y-1,
-                device_id_x, device_id_y);
-
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
-            
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < top_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < right_boundry_edges; ++j)
-                    {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
-                    }
-                }
-            }
-            free(boundry_top_right);
-        }
 
         // //Bottom left
         if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
@@ -789,6 +763,44 @@ void assemble_forward_group_data_device(network* net,
             free(boundry_bottom_left);
         }
 
+
+        // //Bottom 
+        if(bottom_boundry_edges > 0){
+            //receive bottom edges
+            float* boundry_bottom;
+            get_forward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, 
+                &boundry_bottom, 
+                bottom_boundry_edges, tile_input_width_original, depth, TOP, 
+                device_id_x, device_id_y+1,
+                device_id_x, device_id_y);
+
+            int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
+            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
+
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < bottom_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < tile_input_width_original; ++j)
+                    {
+                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+bottom_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
+                    }
+                }
+            }
+            free(boundry_bottom);
+        }   
+
+
+
+
+
+
+
+
+
+
         // //Bottom right
         if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
             float* boundry_bottom_right;
@@ -815,6 +827,16 @@ void assemble_forward_group_data_device(network* net,
             }
             free(boundry_bottom_right);
         }
+
+
+
+
+
+
+
+
+
+
 
         // for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
         // {
@@ -891,6 +913,31 @@ void assemble_backward_group_data_device(network* net,
         }
 
 
+        // //Top left
+        if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+            float* boundry_top_left;
+            get_backward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, num_layers,
+                &boundry_top_left, 
+                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
+                device_id_x-1, device_id_y-1,
+                device_id_x, device_id_y);
+
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < top_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < left_boundry_edges; ++j)
+                    {
+                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + j] = boundry_top_left[(c*left_boundry_edges*top_boundry_edges) + (i*left_boundry_edges) + j];
+                    }
+                }
+            }
+            free(boundry_top_left);
+        }
+
         //Top
         if(top_boundry_edges > 0){
             //receive top edges
@@ -918,7 +965,31 @@ void assemble_backward_group_data_device(network* net,
             free(boundry_top);
         } 
 
+        // //Top right
+        if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
+            float* boundry_top_right;
+            get_backward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, num_layers,
+                &boundry_top_right, 
+                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
+                device_id_x+1, device_id_y-1,
+                device_id_x, device_id_y);
 
+            int left_write_offset = (left_boundry_edges + tile_delta_in_width);
+
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < top_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < right_boundry_edges; ++j)
+                    {
+                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                    }
+                }
+            }
+            free(boundry_top_right);
+        }
 
         //Left
         if(left_boundry_edges > 0){
@@ -947,33 +1018,9 @@ void assemble_backward_group_data_device(network* net,
             }
             free(boundry_left);
         } 
-        // //Bottom 
-        if(bottom_boundry_edges > 0){
-            //receive bottom edges
-            float* boundry_bottom;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_bottom, 
-                bottom_boundry_edges, tile_delta_in_width, depth, TOP, 
-                device_id_x, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
-            int left_write_offset = left_boundry_edges;
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < tile_delta_in_width; ++j)
-                    {
-                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+bottom_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
-                    }
-                }
-            }
-            free(boundry_bottom);
-        }   
+
         // //Right
         if(right_boundry_edges > 0){
             //receive right edges
@@ -1001,56 +1048,6 @@ void assemble_backward_group_data_device(network* net,
             }
             free(boundry_right);
         } 
-        // //Top left
-        if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
-
-            float* boundry_top_left;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_top_left, 
-                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
-                device_id_x-1, device_id_y-1,
-                device_id_x, device_id_y);
-
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < top_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < left_boundry_edges; ++j)
-                    {
-                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + j] = boundry_top_left[(c*left_boundry_edges*top_boundry_edges) + (i*left_boundry_edges) + j];
-                    }
-                }
-            }
-            free(boundry_top_left);
-        }
-
-        // //Top right
-        if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
-            float* boundry_top_right;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_top_right, 
-                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
-                device_id_x+1, device_id_y-1,
-                device_id_x, device_id_y);
-
-            int left_write_offset = (left_boundry_edges + tile_delta_in_width);
-
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < top_boundry_edges; ++i)
-                {
-                    for (int j = 0; j < right_boundry_edges; ++j)
-                    {
-                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
-                    }
-                }
-            }
-            free(boundry_top_right);
-        }
 
         // //Bottom left
         if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
@@ -1077,6 +1074,34 @@ void assemble_backward_group_data_device(network* net,
             }
             free(boundry_bottom_left);
         }
+
+        // //Bottom 
+        if(bottom_boundry_edges > 0){
+            //receive bottom edges
+            float* boundry_bottom;
+            get_backward_group_boundry_data_device(
+                NUM_TILES_X, NUM_TILES_Y,
+                current_layer_idx, num_layers,
+                &boundry_bottom, 
+                bottom_boundry_edges, tile_delta_in_width, depth, TOP, 
+                device_id_x, device_id_y+1,
+                device_id_x, device_id_y);
+
+            int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
+            int left_write_offset = left_boundry_edges;
+
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int i = 0; i < bottom_boundry_edges; ++i)
+                {
+                    for (int j = 0; j < tile_delta_in_width; ++j)
+                    {
+                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+bottom_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                    }
+                }
+            }
+            free(boundry_bottom);
+        }   
 
         // //Bottom right
         if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
@@ -1105,6 +1130,8 @@ void assemble_backward_group_data_device(network* net,
             }
             free(boundry_bottom_right);
         }
+
+
 
         // for (int i = 0; i < end_layer.delta_in_h_with_boundry; ++i)
         // {

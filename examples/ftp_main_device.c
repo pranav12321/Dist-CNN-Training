@@ -122,10 +122,10 @@ int main_device(){
     float* INPUT_IMAGE = calloc(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), sizeof(float));
     fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 1, INPUT_IMAGE, 1);
 
-    net->workspace = calloc(50000000, sizeof(float));
+    net->workspace = calloc(900000000, sizeof(float));
     net->inputs = 3*INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y);
 
-    for (int g = 0; g < profile.num_forward_groups; ++g)
+    for (int g = 0; g < 1; ++g)
     {
 
         partition_forward_device(net, 
@@ -137,13 +137,15 @@ int main_device(){
 
         net->input = calloc(net->inputs, sizeof(float));
 
-        //get boundry data here
+        // //get boundry data here
         assemble_forward_group_data_device(net, 
                                         INPUT_IMAGE,
                                         NUM_TILES_X, NUM_TILES_Y,
                                          profile.fp[g],
                                          DEVICE_ID_X, DEVICE_ID_Y
                                          );
+
+        printf("Received input boundary. Starting inference\n");
 
 
         for (int l = profile.fp[g].layer_start_idx; l <= profile.fp[g].layer_end_idx; ++l)
@@ -182,6 +184,8 @@ int main_device(){
     for (int g = (profile.num_backward_groups-1); g >= 0; --g)
     {
 
+
+
         partition_backward_device(net, 
                             filter_size,
                             &profile.bp[g],
@@ -196,7 +200,8 @@ int main_device(){
                                          net->n
                                          );
 
-        
+        printf("Received delta boundary. Starting backprop\n");
+
         int start_idx = (g==0) ? 1 : profile.bp[g].layer_start_idx;
         for (int l = profile.bp[g].layer_end_idx; l >= start_idx; --l)
         {
