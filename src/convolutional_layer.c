@@ -218,11 +218,11 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.outputs = l.out_h * l.out_w * l.out_c;
     l.inputs = l.w * l.h * l.c;
 
-    l.output = calloc(l.batch*l.outputs*2, sizeof(float));
-    l.output_without_boundry = calloc(l.batch*l.outputs*2, sizeof(float));
-    l.delta  = calloc(l.batch*l.outputs*2, sizeof(float));
-    l.delta_with_boundry  = calloc(l.batch*l.outputs*2, sizeof(float)); //TODO: Calculate this exact size
-    l.delta_without_boundry  = calloc(l.batch*l.outputs*2, sizeof(float));
+    l.output = calloc(l.batch*l.outputs, sizeof(float));
+    l.output_without_boundry = calloc(l.batch*l.outputs, sizeof(float));
+    l.delta  = calloc(l.batch*l.outputs, sizeof(float));
+    l.delta_with_boundry  = calloc(l.batch*l.outputs, sizeof(float)); //TODO: Calculate this exact size
+    l.delta_without_boundry  = calloc(l.batch*l.outputs, sizeof(float));
     // l.delta_ftp_top_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_left_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_top_left_receive  = calloc(l.batch*l.outputs*10, sizeof(float));

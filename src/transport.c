@@ -26,10 +26,8 @@ int o;
 int t;
 int tt;
 
-
-void* send_boundry_thread(void *vargp);
-void* receive_boundry_thread(void *vargp);
-
+pthread_t send_thread0, send_thread1, send_thread2, send_thread3;
+pthread_t receive_thread0, receive_thread1, receive_thread2, receive_thread3;
 
 client_structure* network_links[NUM_TILES_X*NUM_TILES_Y];
 
@@ -175,8 +173,7 @@ void init_transport(){
         }
     }
     
-    pthread_t send_thread0, send_thread1, send_thread2, send_thread3;
-    pthread_t receive_thread0, receive_thread1, receive_thread2, receive_thread3;
+
 
 
     z = 0;
@@ -252,7 +249,9 @@ void* send_boundry_thread(void *vargp){
     while(1){
          
         if((device_id_x != DEVICE_ID_X) || (device_id_y != DEVICE_ID_Y)){
-            while((transmit_entries[i].valid) == 0){}
+            while((transmit_entries[i].valid) == 0){
+                sleep(1);
+            }
         }
 
         if(transmit_entries[i].valid == 1){
@@ -317,7 +316,9 @@ void* receive_boundry_thread(void* vargp){
     while(1){
 
         if((device_id_x != DEVICE_ID_X) || (device_id_y != DEVICE_ID_Y)){
-            while((receive_entries[j].intent_to_read) == 0){}
+            while((receive_entries[j].intent_to_read) == 0){
+                sleep(1);
+            }
         }
  
         if(receive_entries[j].intent_to_read == 1){ 

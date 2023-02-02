@@ -624,7 +624,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_top_left);
+           // free(boundry_top_left);
         }
 
 
@@ -652,7 +652,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_top);
+           // free(boundry_top);
         } 
 
         // //Top right
@@ -678,7 +678,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_top_right);
+           // free(boundry_top_right);
         }
 
         //Left
@@ -706,7 +706,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_left);
+           // free(boundry_left);
         } 
 
         // //Right
@@ -734,7 +734,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_right);
+          // free(boundry_right);
         } 
 
         // //Bottom left
@@ -760,7 +760,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom_left);
+           // free(boundry_bottom_left);
         }
 
 
@@ -789,7 +789,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom);
+           // free(boundry_bottom);
         }   
 
 
@@ -825,7 +825,7 @@ void assemble_forward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom_right);
+           // free(boundry_bottom_right);
         }
 
 
@@ -935,7 +935,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_top_left);
+           // free(boundry_top_left);
         }
 
         //Top
@@ -962,7 +962,7 @@ void assemble_backward_group_data_device(network* net,
                 }
             }
         }
-            free(boundry_top);
+           // free(boundry_top);
         } 
 
         // //Top right
@@ -988,7 +988,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_top_right);
+           // free(boundry_top_right);
         }
 
         //Left
@@ -1016,7 +1016,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_left);
+            //free(boundry_left);
         } 
 
 
@@ -1046,7 +1046,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_right);
+           // free(boundry_right);
         } 
 
         // //Bottom left
@@ -1072,7 +1072,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom_left);
+            //free(boundry_bottom_left);
         }
 
         // //Bottom 
@@ -1100,7 +1100,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom);
+           // free(boundry_bottom);
         }   
 
         // //Bottom right
@@ -1128,7 +1128,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
-            free(boundry_bottom_right);
+           // free(boundry_bottom_right);
         }
 
 

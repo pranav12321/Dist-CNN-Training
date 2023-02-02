@@ -13,6 +13,13 @@
 //12 12 12 6 6 6 3 3 
 //1  1  2  1 1 2 1 1
 
+extern pthread_t send_thread0, send_thread1, send_thread2, send_thread3;
+extern pthread_t receive_thread0, receive_thread1, receive_thread2, receive_thread3;
+
+extern int z;
+extern int o;
+extern int t;
+extern int tt;
 
 int main_device(){
 
@@ -101,6 +108,9 @@ int main_device(){
     int num_layers = 5;
     int unit_boundry = 1;
 
+    int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
+    int filter_stack_vector[5] = {32, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
+
 
     network* net = calloc(1, sizeof(network));
 
@@ -122,8 +132,6 @@ int main_device(){
     float* INPUT_IMAGE = calloc(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), sizeof(float));
     fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 1, INPUT_IMAGE, 1);
 
-    net->workspace = calloc(900000000, sizeof(float));
-    net->inputs = 3*INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y);
 
     for (int g = 0; g < 1; ++g)
     {
@@ -135,7 +143,15 @@ int main_device(){
                             profile.fp[g].start_x_forward, profile.fp[g].start_y_forward,
                             profile.fp[g].end_x_forward, profile.fp[g].end_y_forward);
 
+        net->inputs = net->layers[profile.fp[g].layer_start_idx].featuremap_in_h_with_boundry*
+                        net->layers[profile.fp[g].layer_start_idx].featuremap_in_w_with_boundry*
+                        net->layers[profile.fp[g].layer_start_idx].c;
+
         net->input = calloc(net->inputs, sizeof(float));
+
+        //TODO Find this actual value
+        printf("wsize = %d\n", net->layers[1].workspace_size*sizeof(float));
+        net->workspace = calloc(net->layers[1].workspace_size, sizeof(float));
 
         // //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -146,6 +162,15 @@ int main_device(){
                                          );
 
         printf("Received input boundary. Starting inference\n");
+
+        // pthread_suspend_np(send_thread0);
+        // pthread_suspend_np(send_thread1);
+        // pthread_suspend_np(send_thread2);
+        // pthread_suspend_np(send_thread3);
+        // pthread_suspend_np(receive_thread0);
+        // pthread_suspend_np(receive_thread1);
+        // pthread_suspend_np(receive_thread2);
+        // pthread_suspend_np(receive_thread3);
 
 
         for (int l = profile.fp[g].layer_start_idx; l <= profile.fp[g].layer_end_idx; ++l)
@@ -171,7 +196,11 @@ int main_device(){
                 }
             }
         }
+       // free(net->workspace);
+       // free(net->inputs);
     }
+
+    //free(INPUT_IMAGE);
 
     printf("Inference complete\n");
 
@@ -184,6 +213,26 @@ int main_device(){
     for (int g = (profile.num_backward_groups-1); g >= 0; --g)
     {
 
+        // pthread_create(&send_thread0, NULL, send_boundry_thread, (void*)(&z));
+        // pthread_create(&receive_thread0, NULL, receive_boundry_thread, (void*)(&z));
+
+        // pthread_create(&send_thread1, NULL, send_boundry_thread, (void*)(&o));
+        // pthread_create(&receive_thread1, NULL, receive_boundry_thread, (void*)(&o));
+
+        // pthread_create(&send_thread2, NULL, send_boundry_thread, (void*)(&t));
+        // pthread_create(&receive_thread2, NULL, receive_boundry_thread, (void*)(&t));
+
+        // pthread_create(&send_thread3, NULL, send_boundry_thread, (void*)(&tt));
+        // pthread_create(&receive_thread3, NULL, receive_boundry_thread, (void*)(&tt));
+
+        // pthread_continue_np(send_thread0);
+        // pthread_continue_np(send_thread1);
+        // pthread_continue_np(send_thread2);
+        // pthread_continue_np(send_thread3);
+        // pthread_continue_np(receive_thread0);
+        // pthread_continue_np(receive_thread1);
+        // pthread_continue_np(receive_thread2);
+        // pthread_continue_np(receive_thread3);
 
 
         partition_backward_device(net, 
@@ -201,6 +250,15 @@ int main_device(){
                                          );
 
         printf("Received delta boundary. Starting backprop\n");
+
+        // pthread_suspend_np(send_thread0);
+        // pthread_suspend_np(send_thread1);
+        // pthread_suspend_np(send_thread2);
+        // pthread_suspend_np(send_thread3);
+        // pthread_suspend_np(receive_thread0);
+        // pthread_suspend_np(receive_thread1);
+        // pthread_suspend_np(receive_thread2);
+        // pthread_suspend_np(receive_thread3);
 
         int start_idx = (g==0) ? 1 : profile.bp[g].layer_start_idx;
         for (int l = profile.bp[g].layer_end_idx; l >= start_idx; --l)
@@ -326,7 +384,18 @@ int main_device(){
 
     }
 
+    free(OUTPUT_DELTA);
+
         printf("Backprop complete\n");
+
+        // pthread_continue_np(send_thread0);
+        // pthread_continue_np(send_thread1);
+        // pthread_continue_np(send_thread2);
+        // pthread_continue_np(send_thread3);
+        // pthread_continue_np(receive_thread0);
+        // pthread_continue_np(receive_thread1);
+        // pthread_continue_np(receive_thread2);
+        // pthread_continue_np(receive_thread3);
 
             if(DEVICE_ID_X == 0 && DEVICE_ID_Y == 0)
                 receive_sum_broadcast_weight_updates(net, NUM_TILES_Y, NUM_TILES_X);
