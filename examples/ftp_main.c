@@ -1048,41 +1048,44 @@ int main_yolo(){
 
     network* net = calloc(1, sizeof(network));//SHARED_NETWORKS[i][j];
 
-    net->n = 5;
+    net->n = 11;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
 
     int filter_size = 3;
-    int num_layers = 5;
+    int num_layers = 11;
     int unit_boundry = 1;
 
     //yolo v2
     net->layers[0] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 3, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     //(int batch, int h, int w, int c, int size, int stride, int padding)
-    // net->layers[1] = make_maxpool_layer(1, 604/2, 604/2, 32, 2, 2, 0); 
-    // net->layers[2] = make_convolutional_layer(1, 604/2, 604/2, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    // net->layers[3] = make_maxpool_layer(1, 604/2, 604/2, 64, 2, 2, 0);
-    // net->layers[4] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    //net->layers[1] = make_maxpool_layer(1, 604, 604, 32, 2, 2, 0); 
+    net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 32, FILTER_SIZE, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(1, 302, 302, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    //net->layers[3] = make_maxpool_layer(1, 302, 302, 64, 2, 2, 0);
+    net->layers[3] = make_convolutional_layer(1, 302, 302, 64, 64, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(1, 152, 152, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
 
-    net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    // net->layers[5] = make_convolutional_layer(1, 152/2, 152/2, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    // net->layers[6] = make_convolutional_layer(1, 152/2, 152/2, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    // net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    // net->layers[2] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    // net->layers[3] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    // net->layers[4] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[5] = make_convolutional_layer(1, 152, 152, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[6] = make_convolutional_layer(1, 152, 152, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
 
-    // net->layers[7] = make_maxpool_layer(1, 152/2, 152/2, 128, 2, 2, 0);
+    //net->layers[7] = make_maxpool_layer(1, 152, 152, 128, 2, 2, 0);
+    net->layers[7] = make_convolutional_layer(1, 152, 152, 128, 128, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
 
 
-    // net->layers[8] = make_convolutional_layer(1, 76/2, 76/2, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[8] = make_convolutional_layer(1, 76, 76, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[9] = make_convolutional_layer(1, 76/2, 76/2, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[9] = make_convolutional_layer(1, 76, 76, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[10] = make_convolutional_layer(1, 76/2, 76/2, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[10] = make_convolutional_layer(1, 76, 76, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
     // net->layers[11] = make_maxpool_layer(1, 76/2, 76/2, 256, 2, 2, 0);
 
@@ -1131,7 +1134,7 @@ int main_yolo(){
             for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
             {
 
-                net->layers[l].weights[i] = 0.1;
+                net->layers[l].weights[i] = 0.01;
             }        
 
 
@@ -1145,12 +1148,13 @@ int main_yolo(){
     int outputs = 19*19*1024;
     net->input = calloc(net->inputs, sizeof(float));
 
-    fill_cpu(net->inputs, 1, net->input, 1);
-    fill_cpu(net->layers[4].outputs, 1, net->layers[4].delta, 1);
+    fill_cpu(net->inputs, 0.1, net->input, 1);
+    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
 
-    for (int l = 0; l < 5; ++l)
+    for (int l = 0; l < net->n; ++l)
     {
         net->index = l;
+        printf("Filter stacks = %d\n", net->layers[l].n);
         net->layers[l].forward(net->layers[l], *net);
         net->input = net->layers[l].output;
 
@@ -1180,12 +1184,13 @@ int main_yolo(){
     }
 
 
-    for (int l = 4; l >=1; --l)
+    for (int l = (net->n - 1); l >=1; --l)
     {
         net->index = l;
         net->input = net->layers[l-1].output;
         net->delta = net->layers[l-1].delta;
-        backward_convolutional_layer(net->layers[l], *net);
+        printf("Filter stacks = %d\n", net->layers[l].n);
+        net->layers[l].backward(net->layers[l], *net);
 
     //     printf("Delta layer %d\n", l);
 

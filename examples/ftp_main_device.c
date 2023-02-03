@@ -38,8 +38,6 @@ int main_device(){
         init_transport();
     #endif
 
-    sleep(1);
-
     profile.num_forward_groups = 1;
     profile.num_backward_groups = 1;
 
@@ -47,11 +45,11 @@ int main_device(){
     profile.bp = calloc(profile.num_backward_groups, sizeof(group_profile_backward));
 
     profile.fp[0].layer_start_idx = 0;
-    profile.fp[0].layer_end_idx = 4;
+    profile.fp[0].layer_end_idx = 10;
     profile.fp[0].start_x_forward = 0;
     profile.fp[0].start_y_forward = 0;
-    profile.fp[0].end_x_forward = 303;
-    profile.fp[0].end_y_forward = 303;
+    profile.fp[0].end_x_forward = 37;
+    profile.fp[0].end_y_forward = 37;
 
     // profile.fp[1].layer_start_idx = 1;
     // profile.fp[1].layer_end_idx = 1;
@@ -82,7 +80,7 @@ int main_device(){
     // profile.fp[4].end_y_forward = 303;
 
     profile.bp[0].layer_start_idx = 0;
-    profile.bp[0].layer_end_idx = 4;
+    profile.bp[0].layer_end_idx = 10;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
     profile.bp[0].end_x_backward = 303;
@@ -105,32 +103,19 @@ int main_device(){
 
 
     int filter_size = 3;
-    int num_layers = 5;
+    int num_layers = 11;
     int unit_boundry = 1;
-
-    int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
-    int filter_stack_vector[5] = {32, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
-
 
     network* net = calloc(1, sizeof(network));
 
-    net->n = 5;
+    net->n = 11;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
 
-    net->layers[0].stride = 1;
-    net->layers[1].stride = 1;
-    net->layers[2].stride = 1;
-    net->layers[3].stride = 1;
-    net->layers[4].stride = 1;
-    // net->layers[5].stride = 2;
-    // net->layers[6].stride = 1;
-    // net->layers[7].stride = 1;
-
     float* INPUT_IMAGE = calloc(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), sizeof(float));
-    fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 1, INPUT_IMAGE, 1);
+    fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 0.1, INPUT_IMAGE, 1);
 
 
     for (int g = 0; g < 1; ++g)
@@ -139,7 +124,6 @@ int main_device(){
         partition_forward_device(net, 
                           &profile,
                           &(profile.fp[g]),
-                            3,
                             profile.fp[g].start_x_forward, profile.fp[g].start_y_forward,
                             profile.fp[g].end_x_forward, profile.fp[g].end_y_forward);
 
@@ -150,8 +134,15 @@ int main_device(){
         net->input = calloc(net->inputs, sizeof(float));
 
         //TODO Find this actual value
-        printf("wsize = %d\n", net->layers[1].workspace_size*sizeof(float));
-        net->workspace = calloc(net->layers[1].workspace_size, sizeof(float));
+        int max = 0;
+        for (int i = 0; i < net->n; ++i)
+        {
+            if(net->layers[i].workspace_size > max){
+                max = net->layers[i].workspace_size;
+            }
+        }
+        printf("wsize = %d\n", max*sizeof(float));
+        net->workspace = calloc(max, sizeof(float));
 
         // //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -205,10 +196,10 @@ int main_device(){
     printf("Inference complete\n");
 
     float* OUTPUT_DELTA = calloc(net->layers[net->n - 1].outputs, sizeof(float));
-    fill_cpu(net->layers[net->n - 1].outputs, 1, OUTPUT_DELTA, 1);
-    fill_cpu(net->layers[net->n - 1].outputs, 1, net->layers[net->n - 1].delta_with_boundry, 1);
-    fill_cpu(net->layers[net->n - 1].outputs, 1, net->layers[net->n - 1].delta, 1);
-    fill_cpu(net->layers[net->n - 1].outputs, 1, net->layers[net->n - 1].delta_without_boundry, 1);
+    fill_cpu(net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
+    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta_with_boundry, 1);
+    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta_without_boundry, 1);
 
     for (int g = (profile.num_backward_groups-1); g >= 0; --g)
     {

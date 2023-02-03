@@ -2,16 +2,17 @@
 #include "fused_device.h"
 
 
+int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
+int filter_stack_vector[11] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256};
+int filter_size_vector[11] = {3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3};
+
 void partition_forward_device(network* net,
                         train_groups_profile* profile,
                        group_profile_forward* group, 
-                        int filter_size,
                         int start_x_forward, int start_y_forward,
                         int end_x_forward, int end_y_forward){
 
     int num_layers = net->n;
-
-    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
 
     int left_boundry_edges = 0;
     int top_boundry_edges = 0;
@@ -19,18 +20,30 @@ void partition_forward_device(network* net,
     int right_boundry_edges = 0;
     int bottom_boundry_edges = 0;
 
-    int boundry_frames = unit_boundry;
-
     int start_x_coordinate = start_x_forward;
     int start_y_coordinate = start_y_forward;
     int end_x_coordinate = end_x_forward;
     int end_y_coordinate = end_y_forward;
 
 
+    for (int j = 0; j < net->n; ++j)
+    {
+        net->layers[j].stride = stride_vector[j];
+    }
+
+    for (int j = 0; j < net->n; ++j)
+    {
+        net->layers[j].size = filter_size_vector[j];
+    }
+
+
     for (int i = group->layer_end_idx; i >= group->layer_start_idx; i--)
     {
+        int unit_boundry = ((filter_size_vector[i] & 0x1) == 1) ? ((filter_size_vector[i] - 1)/2) : (filter_size_vector[i]/2);
+        int boundry_frames = unit_boundry;
 
         int stride = net->layers[i].stride;
+        int filter_size = net->layers[i].size;
 
         int next_layer_left_edges;
         int next_layer_right_edges;
@@ -63,42 +76,16 @@ void partition_forward_device(network* net,
         int featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
         int featuremap_in_w_without_boundry = featuremap_in_w_with_boundry - (left_boundry_edges + right_boundry_edges);
 
-        int num_channels = ((i == 0) ? 3 : 32);
-        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, num_channels, 32, 1, filter_size, stride, 0, RELU, 0, 0, 0, 0);
+        int num_channels = ((i == 0) ? 3 : filter_stack_vector[i-1]);
+        net->layers[i] = make_convolutional_layer(1, featuremap_in_h_with_boundry, featuremap_in_w_with_boundry, num_channels, filter_stack_vector[i], 1, filter_size_vector[i], stride, 0, RELU, 0, 0, 0, 0);
 
         for (int i_f = 0; i_f < filter_size*filter_size*net->layers[i].c*net->layers[i].n; ++i_f)
         {
-                net->layers[i].weights[i_f] = 0.1;
+                net->layers[i].weights[i_f] = 0.01;
         }
-
-        // for (int m = 0; m < 3; ++m)
-        // {
-        //     for (int n = 0; n < 3; ++n)
-        //     {
-        //         printf("%.2f ", net->layers[3].weight_updates[m*3 + n]);
-        //     }
-        //     printf("\n");
-            
-        // }
-        // printf("\n");
-
-        net->layers[0].stride = 1;
-        net->layers[1].stride = 1;
-        net->layers[2].stride = 1;
-        net->layers[3].stride = 1;
-        net->layers[4].stride = 1;
-        // net->layers[5].stride = 2;
-        // net->layers[6].stride = 1;
-        // net->layers[7].stride = 1;
 
         net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 304;
         net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 304;
-
-        // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_h = 6;
-        // net->layers[profile->fp[1].layer_start_idx].original_featuremap_in_w = 6;
-
-        // net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_h = 3;
-        // net->layers[profile->fp[2].layer_start_idx].original_featuremap_in_w = 3;
 
         net->layers[i].left_boundry_edges_featuremap = left_boundry_edges;
         net->layers[i].top_boundry_edges_featuremap = top_boundry_edges;
@@ -135,22 +122,6 @@ void partition_forward_device(network* net,
         // printf("End y coordinate = %d\n\n", end_y_coordinate);
         
     }
-
-    // for (int i = start_y_coordinate; i <= end_y_coordinate; ++i)
-    // {
-    //     for (int j = start_x_coordinate; j <= end_x_coordinate; ++j)
-    //     {
-    //         int pos = (i - start_y_coordinate)*(end_x_coordinate - start_x_coordinate + 1) + j - start_x_coordinate;
-    //         if (i < 0 || i >= 12 || j < 0 || j >= 12)
-    //         {
-    //             net->input[pos] = 0.0;
-    //         }
-    //         else{
-    //             net->input[pos] = COMBINED_INPUT_IMAGES[i*12  + j];                
-    //         }
-    //     }
-    // }
-
 }
 
 void partition_backward_device(network* net, 
