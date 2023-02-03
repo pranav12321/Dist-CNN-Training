@@ -2,206 +2,6 @@
 #include "fused_device.h"
 #include "transport.h"
 
-void send_forward_group_boundry_data_device(network* net, float* INPUT_IMAGE,
-    int NUM_TILES_X, int NUM_TILES_Y,
-    int current_layer_idx, 
-    int device_id_x, int device_id_y){
-
-
-    int top_boundry_edges = net->layers[current_layer_idx].top_boundry_edges_featuremap;
-    int bottom_boundry_edges = net->layers[current_layer_idx].bottom_boundry_edges_featuremap;
-    int right_boundry_edges = net->layers[current_layer_idx].right_boundry_edges_featuremap;
-    int left_boundry_edges = net->layers[current_layer_idx].left_boundry_edges_featuremap;
-
-    int featuremap_width = net->layers[current_layer_idx].featuremap_in_w_without_boundry;
-    int featuremap_height = net->layers[current_layer_idx].featuremap_in_h_without_boundry;
-
-    int x_dim = net->layers[current_layer_idx].original_featuremap_in_w;
-    int y_dim = net->layers[current_layer_idx].original_featuremap_in_h;
-    int z_dim = net->layers[current_layer_idx].c;
-
-    float* transmit_data;
-    int transmit_size;
-
-    float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output_without_boundry);
-
-    //SEND TOP
-    if(device_id_y > 0){
-        int rows = top_boundry_edges;
-        int cols = featuremap_width;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                }
-            } 
-        }
-       
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
-        free(transmit_data);
-    }
-
-    //SEND BOTTOM
-    if(device_id_y < (NUM_TILES_Y-1)){
-
-        int rows = bottom_boundry_edges;
-        int cols = featuremap_width;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
-                }
-            }
-        }        
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
-        free(transmit_data);
-
-    }
-
-    //SEND LEFT
-    if(device_id_x > 0){
-
-        int rows = featuremap_height;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                }
-            }        
-        }
-
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
-        free(transmit_data);
-
-    }
-
-    //SEND RIGHT
-    if(device_id_x < (NUM_TILES_X-1)){
-
-        int rows = featuremap_height;
-        int cols = right_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                }
-            }  
-        }
-      
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
-        free(transmit_data);
-
-    }
-
-    //SEND TOP LEFT
-    if((device_id_y > 0) && (device_id_x > 0)){
-        int rows = top_boundry_edges;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                }
-            }       
-        }
- 
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
-        free(transmit_data);
-
-    }
-
-    //SEND TOP RIGHT
-    if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
-        int rows = top_boundry_edges;
-        int cols = right_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                }
-            }  
-        }
-      
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
-        free(transmit_data);
-    }
-
-    //SEND BOTTOM LEFT
-    if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x > 0)){
-        int rows = bottom_boundry_edges;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
-                }
-            }  
-        }
-      
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
-        free(transmit_data);
-    }
-
-    //SEND BOTTOM RIGHT
-    if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x < (NUM_TILES_X-1))){
-        int rows = bottom_boundry_edges;
-        int cols = right_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[c*cols*rows + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
-                }
-            }    
-        }
-    
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
-        free(transmit_data);
-    }
-
-
-
-}
 
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
@@ -245,229 +45,29 @@ void get_forward_group_boundry_data_device(
 
 }
 
-void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
-    int NUM_TILES_X, int NUM_TILES_Y,
-    int current_layer_idx, int num_layers,
-    int device_id_x, int device_id_y){
-
-
-    int top_boundry_edges = net->layers[current_layer_idx].top_boundry_edges_delta;
-    int bottom_boundry_edges = net->layers[current_layer_idx].bottom_boundry_edges_delta;
-    int right_boundry_edges = net->layers[current_layer_idx].right_boundry_edges_delta;
-    int left_boundry_edges = net->layers[current_layer_idx].left_boundry_edges_delta;
-
-    int delta_width = net->layers[current_layer_idx].delta_in_w_without_boundry;
-    int delta_height = net->layers[current_layer_idx].delta_in_h_without_boundry;
-
-    int x_dim = net->layers[current_layer_idx].delta_in_w_without_boundry;
-    int y_dim = net->layers[current_layer_idx].delta_in_h_without_boundry;
-    int z_dim = net->layers[current_layer_idx].c;
-
-    float* transmit_data;
-    int transmit_size;
-
-    float* src_structure = (current_layer_idx == (num_layers-1)) ? OUTPUT_DELTA : (net->layers[current_layer_idx].delta_without_boundry);
-
-
-       // // printf("Transmitting \n");
-       //      for (int m = 0; m < net->layers[current_layer_idx].delta_in_h_without_boundry; ++m)
-       //      {
-       //          for (int n = 0; n < net->layers[current_layer_idx].delta_in_w_without_boundry; ++n)
-       //          {
-       //              printf("%.2f ", net->layers[current_layer_idx].delta_without_boundry[m*net->layers[current_layer_idx].delta_in_w_without_boundry + n]);
-       //          }
-       //          printf("\n");
-                
-       //      }
-       //      printf("\n");
-
-
-    //SEND TOP
-    if(device_id_y > 0){
-        int rows = top_boundry_edges;
-        int cols = delta_width;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                }
-            } 
-        }
-       
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
-       // free(transmit_data);
-    }
-
-    //SEND BOTTOM
-    if(device_id_y < (NUM_TILES_Y-1)){
-
-        int rows = bottom_boundry_edges;
-        int cols = delta_width;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j];
-                }
-            } 
-        }
-       
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
-        //free(transmit_data);
-
-    }
-
-    //SEND LEFT
-    if(device_id_x > 0){
-
-        int rows = delta_height;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-        //printf("Transmitting left\n");
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    //printf("%.2f ", transmit_data[i*cols + j]);
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j];
-                }
-               // printf("\n");
-            }        
-        }
-        //printf("\n");
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
-        //free(transmit_data);
-
-    }
-
-    //SEND RIGHT
-    if(device_id_x < (NUM_TILES_X-1)){
-
-        int rows = delta_height;
-        int cols = right_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-       // printf("Transmitting right rows = %d cols = %d \n", rows, cols);
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j+x_dim-cols];
-                    //printf("%.2f ", transmit_data[i*cols + j]);
-                }
-               // printf("\n");
-            }  
-        }
-
-        //printf("\n");      
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
-        //free(transmit_data);
-
-    }
-
-    //SEND TOP LEFT
-    if((device_id_y > 0) && (device_id_x > 0)){
-        int rows = top_boundry_edges;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j];
-                }
-            }    
-        }
-    
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
-        //free(transmit_data);
-
-    }
-
-    //SEND TOP RIGHT
-    if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
-        int rows = top_boundry_edges;
-        int cols = right_boundry_edges;
-
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j+x_dim-cols];
-                }
-            }     
-        }
-   
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
-        //free(transmit_data);
-    }
-
-    //SEND BOTTOM LEFT
-    if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x > 0)){
-        int rows = bottom_boundry_edges;
-        int cols = left_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j];
-                }
-            }       
-        } 
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
-        //free(transmit_data);
-    }
-
-    //SEND BOTTOM RIGHT
-    if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x < (NUM_TILES_X-1))){
-        int rows = bottom_boundry_edges;
-        int cols = right_boundry_edges;
-        transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-
-        for (int c = 0; c < z_dim; ++c)
-        {
-            for (int i = 0; i < rows; ++i)
-            {
-                for (int j = 0; j < cols; ++j)
-                {
-                    transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
-                }
-            }  
-        }
-      
-        send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
-        //free(transmit_data);
-    }
+// void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
+//     int NUM_TILES_X, int NUM_TILES_Y,
+//     int current_layer_idx, int num_layers,
+//     int device_id_x, int device_id_y){
 
 
 
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// }
 
 
 void get_backward_group_boundry_data_device(
@@ -540,10 +140,22 @@ void assemble_forward_group_data_device(network* net,
         int depth = start_layer.c;
 
 
-        send_forward_group_boundry_data_device(net, INPUT_IMAGE,
-            NUM_TILES_X, NUM_TILES_Y,
-            current_layer_idx, 
-            device_id_x, device_id_y);
+        // send_forward_group_boundry_data_device(net, INPUT_IMAGE,
+        //     NUM_TILES_X, NUM_TILES_Y,
+        //     current_layer_idx, 
+        //     device_id_x, device_id_y);
+
+        int featuremap_width = net->layers[current_layer_idx].featuremap_in_w_without_boundry;
+        int featuremap_height = net->layers[current_layer_idx].featuremap_in_h_without_boundry;
+
+        int x_dim = net->layers[current_layer_idx].original_featuremap_in_w;
+        int y_dim = net->layers[current_layer_idx].original_featuremap_in_h;
+        int z_dim = net->layers[current_layer_idx].c;
+
+        float* transmit_data;
+        int transmit_size;
+
+        float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output_without_boundry);
 
 
         int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
@@ -625,11 +237,35 @@ void assemble_forward_group_data_device(network* net,
                 }
             }
            // free(boundry_top_left);
+
+            //SEND TOP LEFT
+            if((device_id_y > 0) && (device_id_x > 0)){
+                int rows = top_boundry_edges;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
+                        }
+                    }       
+                }
+         
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
+                free(transmit_data);
+
+            }
+
         }
 
 
         //Top
         if(top_boundry_edges > 0){
+
             //receive top edges
             float* boundry_top;
             get_forward_group_boundry_data_device(
@@ -653,6 +289,27 @@ void assemble_forward_group_data_device(network* net,
                 }
             }
            // free(boundry_top);
+
+            //SEND TOP
+            if(device_id_y > 0){
+                int rows = top_boundry_edges;
+                int cols = featuremap_width;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
+                        }
+                    } 
+                }
+               
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
+                free(transmit_data);
+            }
         } 
 
         // //Top right
@@ -679,6 +336,27 @@ void assemble_forward_group_data_device(network* net,
                 }
             }
            // free(boundry_top_right);
+
+            //SEND TOP RIGHT
+            if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
+                int rows = top_boundry_edges;
+                int cols = right_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                        }
+                    }  
+                }
+              
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
+                free(transmit_data);
+            }
         }
 
         //Left
@@ -707,11 +385,59 @@ void assemble_forward_group_data_device(network* net,
                 }
             }
            // free(boundry_left);
+
+            //SEND LEFT
+            if(device_id_x > 0){
+
+                int rows = featuremap_height;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
+                        }
+                    }        
+                }
+
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
+                free(transmit_data);
+
+            }
         } 
 
         // //Right
         if(right_boundry_edges > 0){
             //receive right edges
+
+
+            //SEND RIGHT
+            if(device_id_x < (NUM_TILES_X-1)){
+
+                int rows = featuremap_height;
+                int cols = right_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                        }
+                    }  
+                }
+              
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
+                free(transmit_data);
+
+            }
+
             float* boundry_right;
             get_forward_group_boundry_data_device(
                 NUM_TILES_X, NUM_TILES_Y,
@@ -739,6 +465,28 @@ void assemble_forward_group_data_device(network* net,
 
         // //Bottom left
         if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+            //SEND BOTTOM LEFT
+            if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x > 0)){
+                int rows = bottom_boundry_edges;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                        }
+                    }  
+                }
+              
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
+                free(transmit_data);
+            }
+
             float* boundry_bottom_left;
             get_forward_group_boundry_data_device(
                 NUM_TILES_X, NUM_TILES_Y,
@@ -766,6 +514,29 @@ void assemble_forward_group_data_device(network* net,
 
         // //Bottom 
         if(bottom_boundry_edges > 0){
+
+            //SEND BOTTOM
+            if(device_id_y < (NUM_TILES_Y-1)){
+
+                int rows = bottom_boundry_edges;
+                int cols = featuremap_width;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                        }
+                    }
+                }        
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                free(transmit_data);
+
+            }
+
             //receive bottom edges
             float* boundry_bottom;
             get_forward_group_boundry_data_device(
@@ -803,6 +574,28 @@ void assemble_forward_group_data_device(network* net,
 
         // //Bottom right
         if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
+
+            //SEND BOTTOM RIGHT
+            if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x < (NUM_TILES_X-1))){
+                int rows = bottom_boundry_edges;
+                int cols = right_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[c*cols*rows + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
+                        }
+                    }    
+                }
+            
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
+                free(transmit_data);
+            }
+
             float* boundry_bottom_right;
             get_forward_group_boundry_data_device(
                 NUM_TILES_X, NUM_TILES_Y,
@@ -894,10 +687,23 @@ void assemble_backward_group_data_device(network* net,
 
         int depth = end_layer.c;
 
-        send_backward_group_boundry_data_device(net, OUTPUT_DELTA,
-            NUM_TILES_X, NUM_TILES_Y,
-            current_layer_idx, num_layers,
-            device_id_x, device_id_y);
+        int delta_width = net->layers[current_layer_idx].delta_in_w_without_boundry;
+        int delta_height = net->layers[current_layer_idx].delta_in_h_without_boundry;
+
+        int x_dim = net->layers[current_layer_idx].delta_in_w_without_boundry;
+        int y_dim = net->layers[current_layer_idx].delta_in_h_without_boundry;
+        int z_dim = net->layers[current_layer_idx].c;
+
+        float* transmit_data;
+        int transmit_size;
+
+        float* src_structure = (current_layer_idx == (num_layers-1)) ? OUTPUT_DELTA : (net->layers[current_layer_idx].delta_without_boundry);
+
+
+        // send_backward_group_boundry_data_device(net, OUTPUT_DELTA,
+        //     NUM_TILES_X, NUM_TILES_Y,
+        //     current_layer_idx, num_layers,
+        //     device_id_x, device_id_y);
 
         //Core tile delta
 
@@ -936,6 +742,28 @@ void assemble_backward_group_data_device(network* net,
                 }
             }
            // free(boundry_top_left);
+
+            //SEND TOP LEFT
+            if((device_id_y > 0) && (device_id_x > 0)){
+                int rows = top_boundry_edges;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j];
+                        }
+                    }    
+                }
+            
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
+                //free(transmit_data);
+
+            }
         }
 
         //Top
@@ -950,19 +778,42 @@ void assemble_backward_group_data_device(network* net,
                 device_id_x, device_id_y-1,
                 device_id_x, device_id_y);
 
-        int left_write_offset = left_boundry_edges;
+            int left_write_offset = left_boundry_edges;
 
-        for (int c = 0; c < depth; ++c)
-        {
-            for (int i = 0; i < top_boundry_edges; ++i)
+            for (int c = 0; c < depth; ++c)
             {
-                for (int j = 0; j < tile_delta_in_width; ++j)
+                for (int i = 0; i < top_boundry_edges; ++i)
                 {
-                    net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_boundry_edges)] = boundry_top[(c*top_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                    for (int j = 0; j < tile_delta_in_width; ++j)
+                    {
+                        net->layers[current_layer_idx].delta_with_boundry[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_boundry_edges)] = boundry_top[(c*top_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                    }
                 }
             }
-        }
-           // free(boundry_top);
+               // free(boundry_top);
+
+
+
+            //SEND TOP
+            if(device_id_y > 0){
+                int rows = top_boundry_edges;
+                int cols = delta_width;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
+                        }
+                    } 
+                }
+               
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
+               // free(transmit_data);
+            }
         } 
 
         // //Top right
@@ -989,6 +840,28 @@ void assemble_backward_group_data_device(network* net,
                 }
             }
            // free(boundry_top_right);
+
+            //SEND TOP RIGHT
+            if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
+                int rows = top_boundry_edges;
+                int cols = right_boundry_edges;
+
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j+x_dim-cols];
+                        }
+                    }     
+                }
+           
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
+                //free(transmit_data);
+            }
         }
 
         //Left
@@ -1017,12 +890,67 @@ void assemble_backward_group_data_device(network* net,
                 }
             }
             //free(boundry_left);
+
+
+            //SEND LEFT
+            if(device_id_x > 0){
+
+                int rows = delta_height;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+                //printf("Transmitting left\n");
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            //printf("%.2f ", transmit_data[i*cols + j]);
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j];
+                        }
+                       // printf("\n");
+                    }        
+                }
+                //printf("\n");
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
+                //free(transmit_data);
+
+            }
         } 
 
 
 
         // //Right
         if(right_boundry_edges > 0){
+
+            //SEND RIGHT
+            if(device_id_x < (NUM_TILES_X-1)){
+
+                int rows = delta_height;
+                int cols = right_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+               // printf("Transmitting right rows = %d cols = %d \n", rows, cols);
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i)*x_dim + j+x_dim-cols];
+                            //printf("%.2f ", transmit_data[i*cols + j]);
+                        }
+                       // printf("\n");
+                    }  
+                }
+
+                //printf("\n");      
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
+                //free(transmit_data);
+
+            }
             //receive right edges
             float* boundry_right;
             get_backward_group_boundry_data_device(
@@ -1051,6 +979,27 @@ void assemble_backward_group_data_device(network* net,
 
         // //Bottom left
         if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+            //SEND BOTTOM LEFT
+            if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x > 0)){
+                int rows = bottom_boundry_edges;
+                int cols = left_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j];
+                        }
+                    }       
+                } 
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
+                //free(transmit_data);
+            }
+            
             float* boundry_bottom_left;
             get_backward_group_boundry_data_device(
                 NUM_TILES_X, NUM_TILES_Y,
@@ -1077,6 +1026,30 @@ void assemble_backward_group_data_device(network* net,
 
         // //Bottom 
         if(bottom_boundry_edges > 0){
+
+            //SEND BOTTOM
+            if(device_id_y < (NUM_TILES_Y-1)){
+
+                int rows = bottom_boundry_edges;
+                int cols = delta_width;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j];
+                        }
+                    } 
+                }
+               
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                //free(transmit_data);
+
+            }
+
             //receive bottom edges
             float* boundry_bottom;
             get_backward_group_boundry_data_device(
@@ -1105,6 +1078,30 @@ void assemble_backward_group_data_device(network* net,
 
         // //Bottom right
         if((bottom_boundry_edges > 0) && (right_boundry_edges > 0)){
+
+
+            //SEND BOTTOM RIGHT
+            if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x < (NUM_TILES_X-1))){
+                int rows = bottom_boundry_edges;
+                int cols = right_boundry_edges;
+                transmit_data = calloc((z_dim*rows*cols), sizeof(float));
+
+                for (int c = 0; c < z_dim; ++c)
+                {
+                    for (int i = 0; i < rows; ++i)
+                    {
+                        for (int j = 0; j < cols; ++j)
+                        {
+                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*rows*cols) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
+                        }
+                    }  
+                }
+              
+                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
+                //free(transmit_data);
+            }
+
+
             float* boundry_bottom_right;
             get_backward_group_boundry_data_device(
                 NUM_TILES_X, NUM_TILES_Y,
