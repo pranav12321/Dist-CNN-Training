@@ -194,7 +194,7 @@ void send_boundry(float* data, int size, int device_id_x, int device_id_y){
     while(size > 0){
         int transaction_size = (size > MAX_PACKET_ELEMENTS ? MAX_PACKET_ELEMENTS : size);
 
-        printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, transaction_size*(sizeof(float)), device_id_x, device_id_y);
+        //printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, transaction_size*(sizeof(float)), device_id_x, device_id_y);
 
         int to_send = 0;
 
@@ -205,7 +205,7 @@ void send_boundry(float* data, int size, int device_id_x, int device_id_y){
             exit(0);
         }
 
-        printf("Client %d %d waiting for ack from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y);
+        //printf("Client %d %d waiting for ack from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y);
 
         int bytes = 0;
 
@@ -215,7 +215,7 @@ void send_boundry(float* data, int size, int device_id_x, int device_id_y){
                 bytes += temp;
         }
 
-        printf("Client %d %d received ack from device %d %d size = %d %s\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y, bytes, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer);
+        //printf("Client %d %d received ack from device %d %d size = %d %s\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y, bytes, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer);
 
         cumulative_sent_size += transaction_size;
         size -= transaction_size;
@@ -238,14 +238,14 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
         int transaction_size = (size > (MAX_PACKET_ELEMENTS*4) ? (MAX_PACKET_ELEMENTS*4) : size);
         int temp = transaction_size;
 
-        printf("Size: %d Transaction size: %d\n", size, transaction_size);
+       // printf("Size: %d Transaction size: %d\n", size, transaction_size);
 
         while(transaction_size > 0){
 
             int bytes = recv( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[0] , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
 
-            if(bytes > 0)
-                printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
+            // if(bytes > 0)
+            //     printf("Client %d %d received %d raw bytes\n", DEVICE_ID_X, DEVICE_ID_Y, bytes);
 
             if(bytes > 0){     
                 memcpy(data + cumulative_received_size, receive_buffer, transaction_size);
@@ -255,7 +255,7 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
         }
 
         size -= temp;
-        printf("%s\n", "send ACK");
+       // printf("%s\n", "send ACK");
 
         int to_send = 0;
         
