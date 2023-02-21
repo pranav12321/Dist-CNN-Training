@@ -218,11 +218,11 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.outputs = l.out_h * l.out_w * l.out_c;
     l.inputs = l.w * l.h * l.c;
 
-    l.output = calloc(l.batch*l.outputs, sizeof(float));
-    l.output_without_boundry = calloc(l.batch*l.outputs, sizeof(float));
-    l.delta  = calloc(l.batch*l.outputs, sizeof(float));
-    l.delta_with_boundry  = calloc(l.batch*l.outputs, sizeof(float)); //TODO: Calculate this exact size
-    l.delta_without_boundry  = calloc(l.batch*l.outputs, sizeof(float));
+    l.output = calloc(l.batch*l.outputs*5, sizeof(float));
+    l.output_without_boundry = calloc(l.batch*l.outputs*2, sizeof(float));
+    l.delta  = calloc(l.batch*l.outputs*10, sizeof(float));
+   // l.delta_with_boundry  = calloc(l.batch*l.outputs*5, sizeof(float)); //TODO: Calculate this exact size
+   // l.delta_without_boundry  = calloc(l.batch*l.outputs*2, sizeof(float));
     // l.delta_ftp_top_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_left_receive = calloc(l.batch*l.outputs*10, sizeof(float));
     // l.delta_ftp_top_left_receive  = calloc(l.batch*l.outputs*10, sizeof(float));
@@ -541,7 +541,7 @@ void backward_convolutional_layer(convolutional_layer l, network net)
                     c = imd;
                 }
 
-                printf("%d %d \n", n, k);
+                printf("%d %d %d\n", n, k, m);
                 gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
 
                 if (l.size != 1) {
@@ -636,7 +636,7 @@ void backward_convolutional_layer_dist_filters(convolutional_layer l, network ne
 
     for(i = 0; i < l.batch; ++i){
         for(j = 0; j < l.groups; ++j){
-            float *a = l.delta_without_boundry + (i*l.groups + j)*m*k;
+            float *a = l.delta + (i*l.groups + j)*m*k;
             float *b = net.workspace;
             float *c = l.weight_updates + j*l.nweights/l.groups;
 
@@ -664,7 +664,7 @@ void backward_convolutional_layer_dist_delta(convolutional_layer l, network net)
 
     for(i = 0; i < l.batch; ++i){
         for(j = 0; j < l.groups; ++j){
-            float *a = l.delta_without_boundry + (i*l.groups + j)*m*k;
+            float *a = l.delta + (i*l.groups + j)*m*k;
             float *b = net.workspace;
             float *c = l.weight_updates + j*l.nweights/l.groups;
 
@@ -673,13 +673,14 @@ void backward_convolutional_layer_dist_delta(convolutional_layer l, network net)
 
             if (net.delta) {
                 a = l.weights + j*l.nweights/l.groups;
-                b = l.delta_with_boundry + (i*l.groups + j)*m*k;
+                b = l.delta + (i*l.groups + j)*m*k;
                 c = net.workspace;
                 if (l.size == 1) {
                     c = imd;
                 }
 
                 //printf("%d %d %d %d %d %d\n", n, k, l.h, l.w, l.out_h, l.out_w);
+                printf("%d %d %d\n", n, k, m);
                 gemm(1,0,n,k,m,1,a,n,b,k,0,c,k);
 
                 if (l.size != 1) {

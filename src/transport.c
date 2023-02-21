@@ -26,9 +26,6 @@ int o;
 int t;
 int tt;
 
-pthread_t send_thread0, send_thread1, send_thread2, send_thread3;
-pthread_t receive_thread0, receive_thread1, receive_thread2, receive_thread3;
-
 client_structure* network_links[NUM_TILES_X*NUM_TILES_Y];
 
 uint8_t receive_buffer[200000];
@@ -174,26 +171,6 @@ void init_transport(){
             cs->receive_device_data_ptrs[j].valid = 0;
         }
     }
-    
-
-
-
-    z = 0;
-    o = 1;
-    t = 2;
-    tt = 3;
-
-    // pthread_create(&send_thread0, NULL, send_boundry_thread, (void*)(&z));
-    // pthread_create(&receive_thread0, NULL, receive_boundry_thread, (void*)(&z));
-
-    // pthread_create(&send_thread1, NULL, send_boundry_thread, (void*)(&o));
-    // pthread_create(&receive_thread1, NULL, receive_boundry_thread, (void*)(&o));
-
-    // pthread_create(&send_thread2, NULL, send_boundry_thread, (void*)(&t));
-    // pthread_create(&receive_thread2, NULL, receive_boundry_thread, (void*)(&t));
-
-    // pthread_create(&send_thread3, NULL, send_boundry_thread, (void*)(&tt));
-    // pthread_create(&receive_thread3, NULL, receive_boundry_thread, (void*)(&tt));
 
 }
 
@@ -216,10 +193,6 @@ void send_boundry(float* data, int size, int device_id_x, int device_id_y){
 
     while(size > 0){
         int transaction_size = (size > MAX_PACKET_ELEMENTS ? MAX_PACKET_ELEMENTS : size);
-
-        //*((int*)(transmit_buffer)) = transaction_size*sizeof(float);
-
-        //memcpy(transmit_buffer, data + cumulative_sent_size, transaction_size*(sizeof(float)));
 
         printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, transaction_size*(sizeof(float)), device_id_x, device_id_y);
 
@@ -255,7 +228,7 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
     size = size*sizeof(float);
     int num_transactions = (size/MAX_PACKET_ELEMENTS + ((size%MAX_PACKET_ELEMENTS > 0) ? 1 : 0) );
     int cumulative_received_size = 0;
-    //receive_entries[j].data = calloc(size, sizeof(float));
+
     char ack[15];
 
     uint8_t* data = (uint8_t*)data_float;
@@ -264,7 +237,6 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
 
         int transaction_size = (size > (MAX_PACKET_ELEMENTS*4) ? (MAX_PACKET_ELEMENTS*4) : size);
         int temp = transaction_size;
-        //transaction_size *= sizeof(float);
 
         printf("Size: %d Transaction size: %d\n", size, transaction_size);
 
@@ -295,85 +267,4 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
     
     }   
 
-}
-
-
-void* send_boundry_thread(void *vargp){
-
-    int i = *((int*)(vargp));
-
-    int device_id_x = (i%NUM_TILES_X);
-    int device_id_y = (i/NUM_TILES_X);
-
-    while(1){
-         
-        if((device_id_x != DEVICE_ID_X) || (device_id_y != DEVICE_ID_Y)){
-            while((transmit_entries[i].valid) == 0){
-                sleep(1);
-            }
-        }
-
-        if(transmit_entries[i].valid == 1){
-            printf("Client %d %d ready to be sent to\n", i%NUM_TILES_X, i/NUM_TILES_X);
-
-            int size = transmit_entries[i].size;
-            float* data = transmit_entries[i].data;
-
-            int num_transactions = (size/MAX_PACKET_ELEMENTS + ((size%MAX_PACKET_ELEMENTS > 0) ? 1 : 0) );
-            int cumulative_sent_size = 0;
-            char ack[15];
-
-
-            while(size > 0){
-                int transaction_size = (size > MAX_PACKET_ELEMENTS ? MAX_PACKET_ELEMENTS : size);
-
-                //*((int*)(transmit_buffer)) = transaction_size*sizeof(float);
-
-                //memcpy(transmit_buffer, data + cumulative_sent_size, transaction_size*(sizeof(float)));
-
-                printf("Client %d %d sending %d bytes to device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, transaction_size*(sizeof(float)), device_id_x, device_id_y);
-
-                int to_send = 0;
-
-                to_send = write(network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[0], data + cumulative_sent_size, transaction_size*sizeof(float));
-
-                if(to_send < (transaction_size*sizeof(float))){
-                    printf("SEND FAILURE: Expected %d Actual : %d \n\n", transaction_size*sizeof(float), to_send);
-                    exit(0);
-                }
-
-                printf("Client %d %d waiting for ack from device %d %d\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y);
-
-                int bytes = 0;
-
-                while(bytes < 9){
-                    int temp = read( network_links[device_id_x + NUM_TILES_X*device_id_y]->socket_fd[1] , network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float));
-                    if(temp > 0)
-                        bytes += temp;
-                }
-
-                printf("Client %d %d received ack from device %d %d size = %d %s\n", DEVICE_ID_X, DEVICE_ID_Y, device_id_x, device_id_y, bytes, network_links[device_id_x + NUM_TILES_X*device_id_y]->receive_buffer);
-
-                cumulative_sent_size += transaction_size;
-                size -= transaction_size;
-            }
-
-            transmit_entries[i].valid = 0;
-
-        }
-    }
-}
-
-
-void* receive_boundry_thread(void* vargp){
-
-    int j = *((int*)(vargp));
-
-    int device_id_x = j%NUM_TILES_X;
-    int device_id_y = j/NUM_TILES_X;
-
-    while(1){
-
-
-    }
 }

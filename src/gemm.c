@@ -98,10 +98,24 @@ void gemm_nt(int M, int N, int K, float ALPHA,
     for(i = 0; i < M; ++i){
         for(j = 0; j < N; ++j){
             register float sum = 0;
+            register double sum2 = 0;
+
+            // if(i == 0 && j == 0){
+            //     printf("deb_seq: %d\n", K);
+            // }
             for(k = 0; k < K; ++k){
                 sum += ALPHA*A[i*lda+k]*B[j*ldb + k];
+                sum2 += (double)ALPHA*(double)A[i*lda+k]*(double)B[j*ldb + k];
+                // if(i == 0 && j == 0){
+                //     printf("deb_seq: 4: %.4f 4: %.4f 4: %.4f 8: %.4f 8: %.4f 8: %.4f \n", sum, A[i*lda+k], B[j*ldb + k], sum2, (double)A[i*lda+k], (double)B[j*ldb + k]);
+                // }
+
             }
-            C[i*ldc+j] += sum;
+            C[i*ldc+j] += sum2;
+            // if(i == 0 && j == 0){
+            //     printf("deb: %.4f %.4f\n", sum, C[i*ldc+j]);
+            //     printf("deb: %.4f %.4f\n", sum2, C[i*ldc+j]);
+            // }
         }
     }
 }

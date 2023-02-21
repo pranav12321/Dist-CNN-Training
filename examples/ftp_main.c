@@ -809,54 +809,58 @@ int main_reference(){
     int num_layers = 8;
     int unit_boundry = 1;
 
-    net->layers[0] = make_convolutional_layer(1, 24, 24, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
-    net->layers[1] = make_convolutional_layer(1, 24, 24, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, 24, 24, 1, 1, 1, filter_size, 2, 1, RELU, 0, 0, 0, 0);
-    net->layers[3] = make_convolutional_layer(1, 12, 12, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, 12, 12, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
-    net->layers[5] = make_convolutional_layer(1, 12, 12, 1, 1, 1, filter_size, 2, 1, RELU, 0, 0, 0, 0);
-    net->layers[6] = make_convolutional_layer(1, 6, 6, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
-    net->layers[7] = make_convolutional_layer(1, 6, 6, 1, 1, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0); 
+    net->layers[0] = make_convolutional_layer(1, 24, 24, 3, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[1] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[3] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[5] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[6] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
+    net->layers[7] = make_convolutional_layer(1, 24, 24, 2, 2, 1, filter_size, 1, 1, RELU, 0, 0, 0, 0);
 
-    for (int i_f = 0; i_f < filter_size; ++i_f)
+
+    for (int l = 0; l < net->n; ++l)
     {
-        for (int j_f = 0; j_f < filter_size; ++j_f)
-        {
-            net->layers[0].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[1].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[2].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[3].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[4].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[5].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[6].weights[i_f*filter_size + j_f] = 0.1;
-            net->layers[7].weights[i_f*filter_size + j_f] = 0.1;
+        if(net->layers[l].type == CONVOLUTIONAL){
+
+            int filter_size = net->layers[l].size;
+            int num_filters = net->layers[l].n;
+            int num_channels = net->layers[l].c;
+
+            for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
+            {
+
+                net->layers[l].weights[i] = 0.1;
+            }        
+
+
         }
     }
 
     net->workspace = calloc(net->layers[0].workspace_size*5, sizeof(float));
-    net->inputs = 625;
-    net->input = calloc(625, sizeof(float));
+    net->inputs = 625*3;
+    net->input = calloc(625*3, sizeof(float));
 
-fill_cpu(625, 1, net->input, 1);
-fill_cpu(36, 1, net->layers[7].delta, 1);
+    fill_cpu(576*3, 1, net->input, 1);
+    fill_cpu(576*3, 1, net->layers[net->n - 1].delta, 1);
 
     for (int l = 0; l < num_layers; ++l)
     {
         net->index = l;
         forward_convolutional_layer(net->layers[l], *net);
+        // for (size_t i = 0; i < net->layers[l].out_h; i++)
+        // {
+        //     for (size_t j = 0; j < net->layers[l].out_w; j++)
+        //     {
+        //         printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
+        //     }
+        //     printf("\n");
+            
+        // }
+        // printf("\n");
+
         net->input = net->layers[l].output;
     }
-
-            for (size_t i = 0; i < 6; i++)
-            {
-                for (size_t j = 0; j < 6; j++)
-                {
-                    printf("%.2f ", net->layers[7].output[i*6 + j]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
 
     for (int l = num_layers-1; l >=1; --l)
     {
@@ -864,13 +868,209 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
         net->input = net->layers[l-1].output;
         net->delta = net->layers[l-1].delta;
         backward_convolutional_layer(net->layers[l], *net);
+
+        printf("map at layer %d\n", l);
+
+        for (size_t i = 0; i < net->layers[l-1].out_h; i++)
+        {
+            for (size_t j = 0; j < net->layers[l-1].out_w; j++)
+            {
+                printf("%.5f ", net->layers[l-1].output[i*net->layers[l-1].out_w + j]);
+            }
+            printf("\n");
+            
+        }
+        printf("\n");
+
+        printf("Delta at layer %d\n", l);
+
+        for (size_t i = 0; i < 24; i++)
+        {
+            for (size_t j = 0; j < 24; j++)
+            {
+                printf("%.5f ", net->layers[l].delta[i*24 + j]);
+            }
+            printf("\n");
+            
+        }
+        printf("\n");
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.4f ", net->layers[l].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.4f ", net->layers[l].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.4f ", net->layers[l].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.4f ", net->layers[l].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
     }
 
-            for (size_t i = 0; i < 24; i++)
+        for (size_t i = 0; i < 24; i++)
+        {
+            for (size_t j = 0; j < 24; j++)
             {
-                for (size_t j = 0; j < 24; j++)
+                printf("%.2f ", net->layers[0].delta[i*24 + j]);
+            }
+            printf("\n");
+            
+        }
+        printf("\n");
+
+
+            // for (size_t i = 0; i < 24; i++)
+            // {
+            //     for (size_t j = 0; j < 24; j++)
+            //     {
+            //         printf("%.2f ", net->layers[1].delta[i*24 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+
+            // for (size_t i = 0; i < 12; i++)
+            // {
+            //     for (size_t j = 0; j < 12; j++)
+            //     {
+            //         printf("%.2f ", net->layers[2].delta[i*12 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+
+            // for (size_t i = 0; i < 12; i++)
+            // {
+            //     for (size_t j = 0; j < 12; j++)
+            //     {
+            //         printf("%.2f ", net->layers[3].delta[i*12 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+            // for (size_t i = 0; i < 12; i++)
+            // {
+            //     for (size_t j = 0; j < 12; j++)
+            //     {
+            //         printf("%.2f ", net->layers[4].delta[i*12 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+            // for (size_t i = 0; i < 6; i++)
+            // {
+            //     for (size_t j = 0; j < 6; j++)
+            //     {
+            //         printf("%.2f ", net->layers[5].delta[i*6 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+            // for (size_t i = 0; i < 6; i++)
+            // {
+            //     for (size_t j = 0; j < 6; j++)
+            //     {
+            //         printf("%.2f ", net->layers[6].delta[i*6 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+            // for (size_t i = 0; i < 6; i++)
+            // {
+            //     for (size_t j = 0; j < 6; j++)
+            //     {
+            //         printf("%.2f ", net->layers[7].delta[i*6 + j]);
+            //     }
+            //     printf("\n");
+                
+            // }
+            // printf("\n");
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[0].delta[i*24 + j]);
+                    printf("%.2f ", net->layers[0].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -878,11 +1078,45 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
             printf("\n");
 
 
-            for (size_t i = 0; i < 24; i++)
+
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 24; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[1].delta[i*24 + j]);
+                    printf("%.2f ", net->layers[1].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[1].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -890,11 +1124,44 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
             printf("\n");
 
 
-            for (size_t i = 0; i < 12; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 12; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[2].delta[i*12 + j]);
+                    printf("%.2f ", net->layers[2].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[2].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -902,55 +1169,45 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
             printf("\n");
 
 
-            for (size_t i = 0; i < 12; i++)
+
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 12; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].delta[i*12 + j]);
+                    printf("%.2f ", net->layers[3].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 12; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 12; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].delta[i*12 + j]);
+                    printf("%.2f ", net->layers[3].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 6; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 6; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[5].delta[i*6 + j]);
+                    printf("%.2f ", net->layers[3].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 6; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 6; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[6].delta[i*6 + j]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (size_t i = 0; i < 6; i++)
-            {
-                for (size_t j = 0; j < 6; j++)
-                {
-                    printf("%.2f ", net->layers[7].delta[i*6 + j]);
+                    printf("%.2f ", net->layers[3].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -958,77 +1215,44 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
             printf("\n");
 
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[1].weight_updates[i*3 + j]);
+                    printf("%.4f ", net->layers[4].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[2].weight_updates[i*3 + j]);
+                    printf("%.4f ", net->layers[4].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[i*3 + j]);
+                    printf("%.4f ", net->layers[4].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
             }
             printf("\n");
 
-            for (size_t i = 0; i < 3; i++)
+            for (int m = 0; m < 3; ++m)
             {
-                for (size_t j = 0; j < 3; j++)
+                for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[i*3 + j]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (size_t i = 0; i < 3; i++)
-            {
-                for (size_t j = 0; j < 3; j++)
-                {
-                    printf("%.2f ", net->layers[5].weight_updates[i*3 + j]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (size_t i = 0; i < 3; i++)
-            {
-                for (size_t j = 0; j < 3; j++)
-                {
-                    printf("%.2f ", net->layers[6].weight_updates[i*3 + j]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (size_t i = 0; i < 3; i++)
-            {
-                for (size_t j = 0; j < 3; j++)
-                {
-                    printf("%.2f ", net->layers[7].weight_updates[i*3 + j]);
+                    printf("%.4f ", net->layers[4].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -1038,7 +1262,7 @@ fill_cpu(36, 1, net->layers[7].delta, 1);
 
 }
 
-#define LAYER_SIZE 608
+#define LAYER_SIZE 64
 #define FILTER_SIZE 32
 
 int main_yolo(){
@@ -1063,29 +1287,29 @@ int main_yolo(){
     //(int batch, int h, int w, int c, int size, int stride, int padding)
     //net->layers[1] = make_maxpool_layer(1, 604, 604, 32, 2, 2, 0); 
     net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, 32, FILTER_SIZE, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[2] = make_convolutional_layer(1, 302, 302, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(1, LAYER_SIZE/2, LAYER_SIZE/2, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     //net->layers[3] = make_maxpool_layer(1, 302, 302, 64, 2, 2, 0);
-    net->layers[3] = make_convolutional_layer(1, 302, 302, 64, 64, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[4] = make_convolutional_layer(1, 152, 152, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[3] = make_convolutional_layer(1, LAYER_SIZE/2, LAYER_SIZE/2, 64, 64, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(1, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
 
     // net->layers[1] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     // net->layers[2] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     // net->layers[3] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     // net->layers[4] = make_convolutional_layer(1, LAYER_SIZE, LAYER_SIZE, FILTER_SIZE, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[5] = make_convolutional_layer(1, 152, 152, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    net->layers[6] = make_convolutional_layer(1, 152, 152, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[5] = make_convolutional_layer(1, LAYER_SIZE/4, LAYER_SIZE/4, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[6] = make_convolutional_layer(1, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
 
     //net->layers[7] = make_maxpool_layer(1, 152, 152, 128, 2, 2, 0);
-    net->layers[7] = make_convolutional_layer(1, 152, 152, 128, 128, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[7] = make_convolutional_layer(1, LAYER_SIZE/4, LAYER_SIZE/4, 128, 128, 1, 3, 2, 1, LEAKY, 0, 0, 0, 0);
 
 
-    net->layers[8] = make_convolutional_layer(1, 76, 76, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[8] = make_convolutional_layer(1, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
-    net->layers[9] = make_convolutional_layer(1, 76, 76, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[9] = make_convolutional_layer(1, LAYER_SIZE/8, LAYER_SIZE/8, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
-    net->layers[10] = make_convolutional_layer(1, 76, 76, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[10] = make_convolutional_layer(1, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
     // net->layers[11] = make_maxpool_layer(1, 76/2, 76/2, 256, 2, 2, 0);
 
@@ -1159,16 +1383,16 @@ int main_yolo(){
         net->input = net->layers[l].output;
 
 
-        // for (size_t i = 0; i < 12; i++)
-        // {
-        //     for (size_t j = 0; j < 12; j++)
-        //     {
-        //         printf("%.2f ", net->layers[l].output[i*12 + j]);
-        //     }
-        //     printf("\n");
+        for (size_t i = 0; i < net->layers[l].out_h; i++)
+        {
+            for (size_t j = 0; j < net->layers[l].out_w; j++)
+            {
+                printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
+            }
+            printf("\n");
             
-        // }
-        // printf("\n");
+        }
+        printf("\n");
 
         // for (size_t i = 0; i < 12; i++)
         // {
@@ -1192,18 +1416,18 @@ int main_yolo(){
         printf("Filter stacks = %d\n", net->layers[l].n);
         net->layers[l].backward(net->layers[l], *net);
 
-    //     printf("Delta layer %d\n", l);
+        printf("Delta layer %d\n", l);
 
-    //     for (int m = 0; m < 12; ++m)
-    //     {
-    //         for (int n = 0; n < 12; ++n)
-    //         {
-    //             printf("%.2f ", net->layers[l].delta[m*12 + n]);
-    //         }
-    //         printf("\n");
+        for (int m = 0; m < net->layers[l].out_h; ++m)
+        {
+            for (int n = 0; n < net->layers[l].out_w; ++n)
+            {
+                printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
+            }
+            printf("\n");
             
-    //     }
-    //     printf("\n");
+        }
+        printf("\n");
 
 
     //     for (int m = 0; m < 12; ++m)
@@ -1432,7 +1656,7 @@ int main_yolo(){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[m*3 + n]);
+                    printf("%.4f ", net->layers[4].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
@@ -1443,7 +1667,7 @@ int main_yolo(){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[9 + m*3 + n]);
+                    printf("%.4f ", net->layers[4].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -1454,7 +1678,7 @@ int main_yolo(){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[18 + m*3 + n]);
+                    printf("%.4f ", net->layers[4].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -1465,7 +1689,7 @@ int main_yolo(){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[4].weight_updates[27 + m*3 + n]);
+                    printf("%.4f ", net->layers[4].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 

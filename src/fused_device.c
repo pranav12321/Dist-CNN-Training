@@ -1,10 +1,10 @@
 #include "darknet.h"
 #include "fused_device.h"
 
+extern int stride_vector[8];
+extern int filter_stack_vector[8];
+extern int filter_size_vector[8];
 
-int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
-int filter_stack_vector[11] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256};
-int filter_size_vector[11] = {3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3};
 
 void partition_forward_device(network* net,
                         train_groups_profile* profile,
@@ -84,9 +84,6 @@ void partition_forward_device(network* net,
                 net->layers[i].weights[i_f] = 0.01;
         }
 
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_h = 304;
-        net->layers[profile->fp[0].layer_start_idx].original_featuremap_in_w = 304;
-
         net->layers[i].left_boundry_edges_featuremap = left_boundry_edges;
         net->layers[i].top_boundry_edges_featuremap = top_boundry_edges;
         net->layers[i].right_boundry_edges_featuremap = right_boundry_edges;
@@ -94,54 +91,39 @@ void partition_forward_device(network* net,
 
         net->layers[i].featuremap_in_h_with_boundry = end_y_coordinate - start_y_coordinate + 1; 
         net->layers[i].featuremap_in_h_without_boundry = net->layers[i].featuremap_in_h_with_boundry - (net->layers[i].top_boundry_edges_featuremap + net->layers[i].bottom_boundry_edges_featuremap);
+        net->layers[i].original_featuremap_in_h = net->layers[i].featuremap_in_h_without_boundry;
 
         net->layers[i].featuremap_in_w_with_boundry = end_x_coordinate - start_x_coordinate + 1;
         net->layers[i].featuremap_in_w_without_boundry = net->layers[i].featuremap_in_w_with_boundry - (net->layers[i].left_boundry_edges_featuremap + net->layers[i].right_boundry_edges_featuremap);
+        net->layers[i].original_featuremap_in_w = net->layers[i].featuremap_in_w_without_boundry;
 
+        printf("Layer %d\n\n", i);
+        printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
+        printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
 
-        //TODO: Put this into separate variable
-        if(i==group->layer_start_idx){
-            right_boundry_edges = (net->layers[i].featuremap_in_w_with_boundry - net->layers[i].original_featuremap_in_w - left_boundry_edges);
-            bottom_boundry_edges = (net->layers[i].featuremap_in_h_with_boundry - net->layers[i].original_featuremap_in_h - top_boundry_edges);
-            net->layers[i].right_boundry_edges_featuremap = right_boundry_edges;
-            net->layers[i].bottom_boundry_edges_featuremap = bottom_boundry_edges;
-        }
-
-
-        // printf("Layer %d\n\n", i);
-        // printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
-        // printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
-
-        // printf("Top boundry edges = %d\n", top_boundry_edges);
-        // printf("Left boundry edges = %d\n", left_boundry_edges);
-        // printf("Right boundry edges = %d\n", right_boundry_edges);
-        // printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-        // printf("Start x coordinate = %d\n", start_x_coordinate);
-        // printf("Start y coordinte = %d\n", start_y_coordinate);
-        // printf("End x coordinate = %d\n", end_x_coordinate);
-        // printf("End y coordinate = %d\n\n", end_y_coordinate);
+        printf("Top boundry edges = %d\n", top_boundry_edges);
+        printf("Left boundry edges = %d\n", left_boundry_edges);
+        printf("Right boundry edges = %d\n", right_boundry_edges);
+        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+        printf("Start x coordinate = %d\n", start_x_coordinate);
+        printf("Start y coordinte = %d\n", start_y_coordinate);
+        printf("End x coordinate = %d\n", end_x_coordinate);
+        printf("End y coordinate = %d\n\n", end_y_coordinate);
         
     }
 }
 
 void partition_backward_device(network* net, 
-                        int filter_size,
                         group_profile_backward* profile,
                         int start_x_backward, int start_y_backward,
                         int end_x_backward, int end_y_backward){
-
-    int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
-    int delta_boundry_edges_vertical = net->layers[0].out_h + unit_boundry;
-    int delta_boundry_edges_horizontal = net->layers[0].out_w + unit_boundry;
 
     int left_boundry_edges = 0;
     int top_boundry_edges = 0;
 
     int right_boundry_edges = 0;
     int bottom_boundry_edges = 0;
-
-    int boundry_frames = unit_boundry;
-
+    
     int start_x_coordinate = start_x_backward;
     int start_y_coordinate = start_y_backward;
     int end_x_coordinate = end_x_backward;
@@ -156,7 +138,8 @@ void partition_backward_device(network* net,
         start_idx = (profile->layer_start_idx - 1);
     for (int i = start_idx; i <= (profile->layer_end_idx); ++i)
     {
-
+        int filter_size = net->layers[i].size;
+        int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
         int stride = net->layers[i].stride;
 
         if(i == start_idx){
@@ -234,29 +217,3 @@ void partition_backward_device(network* net,
     }
 
 }
-
-// void compute_tile_boundries(network* net,
-//                             int DEVICE_ID_X, int DEVICE_ID_Y,
-//                             network *** SHARED_NETWORKS,
-//                             float* COMBINED_INPUT_IMAGES, float* COMBINED_EXP_DELTAS,
-//                           int start_y_forward, int start_x_forward,
-//                           int end_y_forward, int end_x_forward,
-//                           int start_y_backward, int start_x_backward,
-//                           int end_y_backward, int end_x_backward){
-// 	int num_layers_fuse = 3;
-// 	int num_layers = 4;
-// 	int filter_size = 3;//net->layers[0].size;
-
-//     // partition_forward(net, DEVICE_ID_X, DEVICE_ID_Y,
-//     //                   SHARED_NETWORKS,
-//     //                   filter_size,
-//     //                   start_x_forward, start_y_forward,
-//     //                   end_x_forward, end_y_forward);
-//     // partition_backward(net, DEVICE_ID_X, DEVICE_ID_Y,
-//     //                    SHARED_NETWORKS,
-//     //                    COMBINED_EXP_DELTAS,
-//     //                    filter_size,
-//     //                    start_x_backward, start_y_backward,
-//     //                    end_x_backward, end_y_backward);
-// }
-
