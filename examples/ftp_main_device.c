@@ -26,8 +26,8 @@ int main_device(){
 
     int NUM_TILES_X = 2;
     int NUM_TILES_Y = 2;
-    int INPUT_WIDTH = 608;
-    int INPUT_HEIGHT = 608;
+    int INPUT_WIDTH = 64;
+    int INPUT_HEIGHT = 64;
     int INPUT_CHANNELS = 3;
 
 
@@ -39,25 +39,25 @@ int main_device(){
         init_transport();
     #endif
 
-    profile.num_forward_groups = 1;
+    profile.num_forward_groups = 2;
     profile.num_backward_groups = 1;
 
     profile.fp = calloc(profile.num_forward_groups, sizeof(group_profile_forward));
     profile.bp = calloc(profile.num_backward_groups, sizeof(group_profile_backward));
 
     profile.fp[0].layer_start_idx = 0;
-    profile.fp[0].layer_end_idx = 10;
+    profile.fp[0].layer_end_idx = 4;
     profile.fp[0].start_x_forward = 0;
     profile.fp[0].start_y_forward = 0;
-    profile.fp[0].end_x_forward = 37;
-    profile.fp[0].end_y_forward = 37;
+    profile.fp[0].end_x_forward = 7;
+    profile.fp[0].end_y_forward = 7;
 
-    // profile.fp[1].layer_start_idx = 1;
-    // profile.fp[1].layer_end_idx = 1;
-    // profile.fp[1].start_x_forward = 0;
-    // profile.fp[1].start_y_forward = 0;
-    // profile.fp[1].end_x_forward = 303;
-    // profile.fp[1].end_y_forward = 303;
+    profile.fp[1].layer_start_idx = 5;
+    profile.fp[1].layer_end_idx = 10;
+    profile.fp[1].start_x_forward = 0;
+    profile.fp[1].start_y_forward = 0;
+    profile.fp[1].end_x_forward = 3;
+    profile.fp[1].end_y_forward = 3;
 
     // profile.fp[2].layer_start_idx = 2;
     // profile.fp[2].layer_end_idx = 2;
@@ -84,8 +84,8 @@ int main_device(){
     profile.bp[0].layer_end_idx = 10;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
-    profile.bp[0].end_x_backward = 303;
-    profile.bp[0].end_y_backward = 303;
+    profile.bp[0].end_x_backward = 31;
+    profile.bp[0].end_y_backward = 31;
 
     // profile.bp[1].layer_start_idx = 4;
     // profile.bp[1].layer_end_idx = 5;
@@ -113,7 +113,7 @@ int main_device(){
     fill_cpu(INPUT_CHANNELS*(INPUT_WIDTH/NUM_TILES_X)*(INPUT_HEIGHT/NUM_TILES_Y), 0.1, INPUT_IMAGE, 1);
 
 
-    for (int g = 0; g < 1; ++g)
+    for (int g = 0; g < profile.num_forward_groups; ++g)
     {
 
         partition_forward_device(net, 
@@ -130,7 +130,7 @@ int main_device(){
 
         //TODO Find this actual value
         int max = 0;
-        for (int i = 0; i < net->n; ++i)
+        for (int i = profile.fp[g].layer_start_idx; i <= profile.fp[g].layer_end_idx; ++i)
         {
             if(net->layers[i].workspace_size > max){
                 max = net->layers[i].workspace_size;
@@ -154,8 +154,22 @@ int main_device(){
 
             zero_out_edges_featuremap_device(net, l, NUM_TILES_Y, NUM_TILES_X, DEVICE_ID_Y, DEVICE_ID_X);
             net->index = l;
+
+            //printf("featuremap_in_w_with_boundry %d featuremap_in_h_with_boundry %d \n", net->layers[l].featuremap_in_w_with_boundry, net->layers[l].featuremap_in_h_with_boundry);
             
             forward_convolutional_layer(net->layers[l], *net);
+            printf("Layer %d forward out\n", l);
+
+                // for (size_t i = 0; i < net->layers[l].out_h; i++)
+                // {
+                //     for (size_t j = 0; j < net->layers[l].out_w; j++)
+                //     {
+                //         printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
+                //     }
+                //     printf("\n");
+                    
+                // }
+                // printf("\n");
 
             if(l == profile.fp[g].layer_start_idx){
                 free(net->input);
@@ -167,7 +181,7 @@ int main_device(){
         // free(net->input);
         int last_layer = profile.fp[g].layer_end_idx;
 
-        for (int c = 0; c < net->layers[last_layer].c; ++c)
+        for (int c = 0; c < net->layers[last_layer].n; ++c)
         {
             for (int i_s = 0; i_s < net->layers[last_layer].out_h; ++i_s)
             {
@@ -178,9 +192,22 @@ int main_device(){
                 }
             }
         }
+
+            for (size_t i_s = 0; i_s < net->layers[last_layer].out_h; i_s++)
+            {
+                for (size_t j_s = 0; j_s < net->layers[last_layer].out_w; j_s++)
+                {
+                    printf("%.2f ", net->layers[last_layer].output_without_boundry[i_s*net->layers[last_layer].out_w + j_s]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+            //while(1);
        // free(net->workspace);
        // free(net->inputs);
     }
+    // while(1);
 
     //free(INPUT_IMAGE);
 
@@ -212,6 +239,7 @@ int main_device(){
         int start_idx = (g==0) ? 1 : profile.bp[g].layer_start_idx;
         for (int l = profile.bp[g].layer_end_idx; l >= start_idx; --l)
         {
+            printf("Layer %d\n", l);
 
             int unit_boundry = (net->layers[l].size / 2);
 

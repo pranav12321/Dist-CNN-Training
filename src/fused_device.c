@@ -97,18 +97,18 @@ void partition_forward_device(network* net,
         net->layers[i].featuremap_in_w_without_boundry = net->layers[i].featuremap_in_w_with_boundry - (net->layers[i].left_boundry_edges_featuremap + net->layers[i].right_boundry_edges_featuremap);
         net->layers[i].original_featuremap_in_w = net->layers[i].featuremap_in_w_without_boundry;
 
-        printf("Layer %d\n\n", i);
-        printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
-        printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
+        // printf("Layer %d\n\n", i);
+        // printf("FEATUREMAP H with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_h_with_boundry, net->layers[i].featuremap_in_h_without_boundry);
+        // printf("FEATUREMAP W with boundry/without boundry = %d %d\n", net->layers[i].featuremap_in_w_with_boundry, net->layers[i].featuremap_in_w_without_boundry);
 
-        printf("Top boundry edges = %d\n", top_boundry_edges);
-        printf("Left boundry edges = %d\n", left_boundry_edges);
-        printf("Right boundry edges = %d\n", right_boundry_edges);
-        printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-        printf("Start x coordinate = %d\n", start_x_coordinate);
-        printf("Start y coordinte = %d\n", start_y_coordinate);
-        printf("End x coordinate = %d\n", end_x_coordinate);
-        printf("End y coordinate = %d\n\n", end_y_coordinate);
+        // printf("Top boundry edges = %d\n", top_boundry_edges);
+        // printf("Left boundry edges = %d\n", left_boundry_edges);
+        // printf("Right boundry edges = %d\n", right_boundry_edges);
+        // printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
+        // printf("Start x coordinate = %d\n", start_x_coordinate);
+        // printf("Start y coordinte = %d\n", start_y_coordinate);
+        // printf("End x coordinate = %d\n", end_x_coordinate);
+        // printf("End y coordinate = %d\n\n", end_y_coordinate);
         
     }
 }
