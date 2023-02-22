@@ -149,7 +149,7 @@ void assemble_forward_group_data_device(network* net,
         float* transmit_data;
         int transmit_size;
 
-        float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output_without_boundry);
+        float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output);
 
 
         int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
@@ -615,16 +615,16 @@ void assemble_forward_group_data_device(network* net,
            free(boundry_bottom_right);
         }
 
-        // for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
-        // {
-        //     for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
-        //     {
-        //         printf("%.2f ", net->input[(i*start_layer.featuremap_in_w_with_boundry) + j]);
-        //     }
-        //     printf("\n");
-        // }
+        for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
+        {
+            for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
+            {
+                printf("%.2f ", net->input[(i*start_layer.featuremap_in_w_with_boundry) + j]);
+            }
+            printf("\n");
+        }
 
-        // printf("\n");
+        printf("\n");
 
         if(group.layer_start_idx > 0){
 
@@ -1112,12 +1112,13 @@ void assemble_backward_group_data_device(network* net,
         // {
         //     for (int j = 0; j < end_layer.delta_in_w_with_boundry; ++j)
         //     {
-        //         printf("%.2f ", net->layers[current_layer_idx].delta_with_boundry[(i*end_layer.delta_in_w_with_boundry) + j]);
+        //         printf("%.2f ", net->layers[current_layer_idx].delta[(i*end_layer.delta_in_w_with_boundry) + j]);
         //     }
         //     printf("\n");
         // }
 
         // printf("\n");
+       // while(1);
 
 
 
