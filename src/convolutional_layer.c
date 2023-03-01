@@ -219,7 +219,7 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.inputs = l.w * l.h * l.c;
 
     l.output = calloc(l.batch*l.outputs*5, sizeof(float));
-    l.output_without_boundry = calloc(l.batch*l.outputs*2, sizeof(float));
+    //l.output_without_boundry = calloc(l.batch*l.outputs*2, sizeof(float));
     l.delta  = calloc(l.batch*l.outputs*10, sizeof(float));
    // l.delta_with_boundry  = calloc(l.batch*l.outputs*5, sizeof(float)); //TODO: Calculate this exact size
    // l.delta_without_boundry  = calloc(l.batch*l.outputs*2, sizeof(float));

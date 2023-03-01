@@ -615,16 +615,16 @@ void assemble_forward_group_data_device(network* net,
            free(boundry_bottom_right);
         }
 
-        for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
-        {
-            for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
-            {
-                printf("%.2f ", net->input[(i*start_layer.featuremap_in_w_with_boundry) + j]);
-            }
-            printf("\n");
-        }
+        // for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
+        // {
+        //     for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
+        //     {
+        //         printf("%.2f ", net->input[(i*start_layer.featuremap_in_w_with_boundry) + j]);
+        //     }
+        //     printf("\n");
+        // }
 
-        printf("\n");
+        // printf("\n");
 
         if(group.layer_start_idx > 0){
 
