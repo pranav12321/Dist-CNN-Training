@@ -9,6 +9,11 @@
 
 #include "transport.h"
 
+int NUM_TILES_X;
+int NUM_TILES_Y;
+int DEVICE_ID_X;
+int DEVICE_ID_Y;
+
 
 // int stride_vector[16] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1};
 // int filter_stack_vector[16] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256, 256, 512, 256, 512, 256};
@@ -24,12 +29,17 @@ int sync_group_vector[11] = {1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1};
 // int filter_stack_vector[8] = {2, 2, 2, 2, 2, 2, 2, 2};
 // int filter_size_vector[8] = {3, 3, 3, 3, 3, 3, 3, 3};
 
-int main_device(){
+int main_device(int argc, char* argv[]){
 
-    int NUM_TILES_X = 2;
-    int NUM_TILES_Y = 2;
-    int INPUT_WIDTH = 64;
-    int INPUT_HEIGHT = 64;
+    NUM_TILES_X = atoi(argv[1]);
+    NUM_TILES_Y = atoi(argv[2]);
+    DEVICE_ID_X = atoi(argv[19]);
+    DEVICE_ID_Y = atoi(argv[20]);
+
+    printf("%d %d %d %d\n", NUM_TILES_X, NUM_TILES_Y, DEVICE_ID_X, DEVICE_ID_Y);
+
+    int INPUT_WIDTH = 608;
+    int INPUT_HEIGHT = 608;
     int INPUT_CHANNELS = 3;
 
 
@@ -38,10 +48,10 @@ int main_device(){
     #ifdef SERVER
         init_server();
     #else
-        init_transport();
+        init_transport(argv);
     #endif
 
-    profile.num_forward_groups = 11;
+    profile.num_forward_groups = 1;
     profile.num_backward_groups = 1;
 
     profile.fp = calloc(profile.num_forward_groups, sizeof(group_profile_forward));
@@ -53,88 +63,88 @@ int main_device(){
     // }
 
     profile.fp[0].layer_start_idx = 0;
-    profile.fp[0].layer_end_idx = 0;
+    profile.fp[0].layer_end_idx = 10;
     profile.fp[0].start_x_forward = 0;
     profile.fp[0].start_y_forward = 0;
-    profile.fp[0].end_x_forward = 31;
-    profile.fp[0].end_y_forward = 31;
+    profile.fp[0].end_x_forward = (76/NUM_TILES_X) - 1;
+    profile.fp[0].end_y_forward = (76/NUM_TILES_Y) - 1;
 
-    profile.fp[1].layer_start_idx = 1;
-    profile.fp[1].layer_end_idx = 1;
-    profile.fp[1].start_x_forward = 0;
-    profile.fp[1].start_y_forward = 0;
-    profile.fp[1].end_x_forward = 15;
-    profile.fp[1].end_y_forward = 15;
+    // profile.fp[1].layer_start_idx = 1;
+    // profile.fp[1].layer_end_idx = 1;
+    // profile.fp[1].start_x_forward = 0;
+    // profile.fp[1].start_y_forward = 0;
+    // profile.fp[1].end_x_forward = 151;
+    // profile.fp[1].end_y_forward = 151;
 
-    profile.fp[2].layer_start_idx = 2;
-    profile.fp[2].layer_end_idx = 2;
-    profile.fp[2].start_x_forward = 0;
-    profile.fp[2].start_y_forward = 0;
-    profile.fp[2].end_x_forward = 15;
-    profile.fp[2].end_y_forward = 15;
+    // profile.fp[2].layer_start_idx = 2;
+    // profile.fp[2].layer_end_idx = 2;
+    // profile.fp[2].start_x_forward = 0;
+    // profile.fp[2].start_y_forward = 0;
+    // profile.fp[2].end_x_forward = 151;
+    // profile.fp[2].end_y_forward = 151;
 
-    profile.fp[3].layer_start_idx = 3;
-    profile.fp[3].layer_end_idx = 3;
-    profile.fp[3].start_x_forward = 0;
-    profile.fp[3].start_y_forward = 0;
-    profile.fp[3].end_x_forward = 7;
-    profile.fp[3].end_y_forward = 7;
+    // profile.fp[3].layer_start_idx = 3;
+    // profile.fp[3].layer_end_idx = 3;
+    // profile.fp[3].start_x_forward = 0;
+    // profile.fp[3].start_y_forward = 0;
+    // profile.fp[3].end_x_forward = 75;
+    // profile.fp[3].end_y_forward = 75;
 
-    profile.fp[4].layer_start_idx = 4;
-    profile.fp[4].layer_end_idx = 4;
-    profile.fp[4].start_x_forward = 0;
-    profile.fp[4].start_y_forward = 0;
-    profile.fp[4].end_x_forward = 7;
-    profile.fp[4].end_y_forward = 7;
+    // profile.fp[4].layer_start_idx = 4;
+    // profile.fp[4].layer_end_idx = 4;
+    // profile.fp[4].start_x_forward = 0;
+    // profile.fp[4].start_y_forward = 0;
+    // profile.fp[4].end_x_forward = 75;
+    // profile.fp[4].end_y_forward = 75;
 
-    profile.fp[5].layer_start_idx = 5;
-    profile.fp[5].layer_end_idx = 5;
-    profile.fp[5].start_x_forward = 0;
-    profile.fp[5].start_y_forward = 0;
-    profile.fp[5].end_x_forward = 7;
-    profile.fp[5].end_y_forward = 7;
+    // profile.fp[5].layer_start_idx = 5;
+    // profile.fp[5].layer_end_idx = 5;
+    // profile.fp[5].start_x_forward = 0;
+    // profile.fp[5].start_y_forward = 0;
+    // profile.fp[5].end_x_forward = 75;
+    // profile.fp[5].end_y_forward = 75;
 
-    profile.fp[6].layer_start_idx = 6;
-    profile.fp[6].layer_end_idx = 6;
-    profile.fp[6].start_x_forward = 0;
-    profile.fp[6].start_y_forward = 0;
-    profile.fp[6].end_x_forward = 7;
-    profile.fp[6].end_y_forward = 7;
+    // profile.fp[6].layer_start_idx = 6;
+    // profile.fp[6].layer_end_idx = 6;
+    // profile.fp[6].start_x_forward = 0;
+    // profile.fp[6].start_y_forward = 0;
+    // profile.fp[6].end_x_forward = 75;
+    // profile.fp[6].end_y_forward = 75;
 
-    profile.fp[7].layer_start_idx = 7;
-    profile.fp[7].layer_end_idx = 7;
-    profile.fp[7].start_x_forward = 0;
-    profile.fp[7].start_y_forward = 0;
-    profile.fp[7].end_x_forward = 3;
-    profile.fp[7].end_y_forward = 3;
+    // profile.fp[7].layer_start_idx = 7;
+    // profile.fp[7].layer_end_idx = 7;
+    // profile.fp[7].start_x_forward = 0;
+    // profile.fp[7].start_y_forward = 0;
+    // profile.fp[7].end_x_forward = 37;
+    // profile.fp[7].end_y_forward = 37;
 
-    profile.fp[8].layer_start_idx = 8;
-    profile.fp[8].layer_end_idx = 8;
-    profile.fp[8].start_x_forward = 0;
-    profile.fp[8].start_y_forward = 0;
-    profile.fp[8].end_x_forward = 3;
-    profile.fp[8].end_y_forward = 3;
+    // profile.fp[8].layer_start_idx = 8;
+    // profile.fp[8].layer_end_idx = 8;
+    // profile.fp[8].start_x_forward = 0;
+    // profile.fp[8].start_y_forward = 0;
+    // profile.fp[8].end_x_forward = 37;
+    // profile.fp[8].end_y_forward = 37;
 
-    profile.fp[9].layer_start_idx = 9;
-    profile.fp[9].layer_end_idx = 9;
-    profile.fp[9].start_x_forward = 0;
-    profile.fp[9].start_y_forward = 0;
-    profile.fp[9].end_x_forward = 3;
-    profile.fp[9].end_y_forward = 3;
+    // profile.fp[9].layer_start_idx = 9;
+    // profile.fp[9].layer_end_idx = 9;
+    // profile.fp[9].start_x_forward = 0;
+    // profile.fp[9].start_y_forward = 0;
+    // profile.fp[9].end_x_forward = 37;
+    // profile.fp[9].end_y_forward = 37;
 
-    profile.fp[10].layer_start_idx = 10;
-    profile.fp[10].layer_end_idx = 10;
-    profile.fp[10].start_x_forward = 0;
-    profile.fp[10].start_y_forward = 0;
-    profile.fp[10].end_x_forward = 3;
-    profile.fp[10].end_y_forward = 3;
+    // profile.fp[10].layer_start_idx = 10;
+    // profile.fp[10].layer_end_idx = 10;
+    // profile.fp[10].start_x_forward = 0;
+    // profile.fp[10].start_y_forward = 0;
+    // profile.fp[10].end_x_forward = 37;
+    // profile.fp[10].end_y_forward = 37;
 
     profile.bp[0].layer_start_idx = 0;
     profile.bp[0].layer_end_idx = 10;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
-    profile.bp[0].end_x_backward = 31;
-    profile.bp[0].end_y_backward = 31;
+    profile.bp[0].end_x_backward = (INPUT_WIDTH/NUM_TILES_X) - 1;//151;
+    profile.bp[0].end_y_backward = (INPUT_HEIGHT/NUM_TILES_Y) - 1;;
 
     // profile.bp[1].layer_start_idx = 4;
     // profile.bp[1].layer_end_idx = 5;
@@ -186,7 +196,7 @@ int main_device(){
             }
         }
         printf("wsize = %d inputs = %d outputs = %d\n", max*sizeof(float), net->inputs, net->layers[0].outputs);
-        net->workspace = calloc(max*10, sizeof(float));
+        net->workspace = calloc(max, sizeof(float));
 
         //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -204,21 +214,7 @@ int main_device(){
             zero_out_edges_featuremap_device(net, l, NUM_TILES_Y, NUM_TILES_X, DEVICE_ID_Y, DEVICE_ID_X);
             net->index = l;
 
-            //printf("featuremap_in_w_with_boundry %d featuremap_in_h_with_boundry %d \n", net->layers[l].featuremap_in_w_with_boundry, net->layers[l].featuremap_in_h_with_boundry);
-            
             forward_convolutional_layer(net->layers[l], *net);
-            printf("Layer %d forward out\n", l);
-
-                // for (size_t i = 0; i < net->layers[l].out_h; i++)
-                // {
-                //     for (size_t j = 0; j < net->layers[l].out_w; j++)
-                //     {
-                //         printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
-                //     }
-                //     printf("\n");
-                    
-                // }
-                // printf("\n");
 
             if(l == profile.fp[g].layer_start_idx){
                 free(net->input);
@@ -230,37 +226,22 @@ int main_device(){
         // free(net->input);
         int last_layer = profile.fp[g].layer_end_idx;
 
-        // for (int c = 0; c < net->layers[last_layer].n; ++c)
-        // {
-        //     for (int i_s = 0; i_s < net->layers[last_layer].out_h; ++i_s)
-        //     {
-        //         for (int j_s = 0; j_s < net->layers[last_layer].out_w; ++j_s)
-        //         {
-        //             net->layers[last_layer].output_without_boundry[(c*net->layers[last_layer].out_w*net->layers[last_layer].out_h) + (i_s*net->layers[last_layer].out_w) + j_s] 
-        //             = net->layers[last_layer].output[(c*net->layers[last_layer].out_w*net->layers[last_layer].out_h) + (i_s*net->layers[last_layer].out_w) + j_s];
-        //         }
-        //     }
-        // }
-
-            // for (size_t i_s = 0; i_s < net->layers[last_layer].out_h; i_s++)
-            // {
-            //     for (size_t j_s = 0; j_s < net->layers[last_layer].out_w; j_s++)
-            //     {
-            //         printf("%.2f ", net->layers[last_layer].output[i_s*net->layers[last_layer].out_w + j_s]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-            //while(1);
-       // free(net->workspace);
-       // free(net->inputs);
+       free(net->workspace);
     }
-    // while(1);
 
     //free(INPUT_IMAGE);
 
     printf("Inference complete\n");
+
+    int max = 0;
+    for (int i = 0; i < net->n; ++i)
+    {
+        if(net->layers[i].workspace_size > max){
+            max = net->layers[i].workspace_size;
+        }
+    }
+    printf("wsize = %d inputs = %d outputs = %d\n", max*sizeof(float), net->inputs, net->layers[0].outputs);
+    net->workspace = calloc(max, sizeof(float));
 
     float* OUTPUT_DELTA = calloc(net->layers[net->n - 1].outputs, sizeof(float));
     fill_cpu(net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
@@ -341,18 +322,6 @@ int main_device(){
 
             backward_convolutional_layer_dist_delta(net->layers[l], *net);
 
-            // for (size_t i_s = 0; i_s < net->layers[l].delta_in_h_with_boundry; i_s++)
-            // {
-            //     for (size_t j_s = 0; j_s < net->layers[l].delta_in_w_with_boundry; j_s++)
-            //     {
-            //         printf("%.2f ", net->layers[l].delta[i_s*net->layers[l].delta_in_w_with_boundry + j_s]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-            // while(1);
-
             int x_dim = net->layers[l].delta_in_w_without_boundry;
             int y_dim = net->layers[l].delta_in_h_without_boundry;
             int depth = net->layers[l].n;
@@ -387,20 +356,6 @@ int main_device(){
             net->layers[l].pad = 0;
 
             net->index = l;
-
-            // for (size_t i_s = 0; i_s < featuremap_without_boundry_height; i_s++)
-            // {
-            //     for (size_t j_s = 0; j_s < featuremap_without_boundry_width; j_s++)
-            //     {
-            //         printf("%.2f ", net->layers[l-1].output[i_s*featuremap_without_boundry_width + j_s]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-
-            // while(1);
 
             backward_convolutional_layer_dist_filters(net->layers[l], *net);
 
@@ -652,6 +607,6 @@ int main_device(){
             printf("Done\n");
 }
 
-int main(){
-    main_device();
+int main(int argc, char* argv[]){
+    main_device(argc, argv);
 }

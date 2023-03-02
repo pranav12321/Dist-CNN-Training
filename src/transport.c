@@ -18,17 +18,36 @@
 #define PORT 8080 //SERVER PORT
 #define SA struct sockaddr
 
-#define NUM_TILES_X 4
-#define NUM_TILES_Y 4
+extern int NUM_TILES_X;
+extern int NUM_TILES_Y;
+extern int DEVICE_ID_X;
+extern int DEVICE_ID_Y;
 
 int z;
 int o;
 int t;
 int tt;
 
-client_structure* network_links[NUM_TILES_X*NUM_TILES_Y];
+client_structure** network_links;
 
 uint8_t receive_buffer[200000];
+
+char DEVICE_0000_IP[15];// = "192.168.4.5";
+char DEVICE_0001_IP[15];// = "192.168.4.5";
+char DEVICE_0010_IP[15]; //= "192.168.4.12";
+char DEVICE_0011_IP[15]; // = "192.168.4.12";
+char DEVICE_0100_IP[15]; // = "192.168.4.5";
+char DEVICE_0101_IP[15]; // = "192.168.4.5";
+char DEVICE_0110_IP[15]; // = "192.168.4.12";
+char DEVICE_0111_IP[15]; // = "192.168.4.12";
+char DEVICE_1000_IP[15]; // = "192.168.4.2";
+char DEVICE_1001_IP[15]; // = "192.168.4.2";
+char DEVICE_1010_IP[15]; // = "192.168.4.9";
+char DEVICE_1011_IP[15]; // = "192.168.4.9";
+char DEVICE_1100_IP[15]; // = "192.168.4.2";
+char DEVICE_1101_IP[15]; // = "192.168.4.2";
+char DEVICE_1110_IP[15]; //= "192.168.4.9";
+char DEVICE_1111_IP[15]; // = "192.168.4.9";
 
 void get_device_ip(int device_id_x, int device_id_y, char* ip){
     if(device_id_x == 0 && device_id_y == 0){
@@ -81,11 +100,29 @@ void get_device_ip(int device_id_x, int device_id_y, char* ip){
     }
 }
 
-void init_transport(){
+void init_transport(char* argv[]){
 
     struct sockaddr_in servaddr, cli;
     int sockfd, connfd, len;
- 
+
+    network_links = (client_structure**)calloc(NUM_TILES_X*NUM_TILES_Y, sizeof(client_structure*));
+
+    strcpy(DEVICE_0000_IP, argv[3]);
+    strcpy(DEVICE_0001_IP, argv[4]);
+    strcpy(DEVICE_0010_IP, argv[5]);
+    strcpy(DEVICE_0011_IP, argv[6]);
+    strcpy(DEVICE_0100_IP, argv[7]);
+    strcpy(DEVICE_0101_IP, argv[8]);
+    strcpy(DEVICE_0110_IP, argv[9]);
+    strcpy(DEVICE_0111_IP, argv[10]);
+    strcpy(DEVICE_1000_IP, argv[11]);
+    strcpy(DEVICE_1001_IP, argv[12]);
+    strcpy(DEVICE_1010_IP, argv[13]);
+    strcpy(DEVICE_1011_IP, argv[14]);
+    strcpy(DEVICE_1100_IP, argv[15]);
+    strcpy(DEVICE_1101_IP, argv[16]);
+    strcpy(DEVICE_1110_IP, argv[17]);
+    strcpy(DEVICE_1111_IP, argv[18]);
 
     //SERVER ENDPOINTS
     printf("IDx: %d IDY: %d\n", DEVICE_ID_X, DEVICE_ID_Y);
@@ -214,10 +251,6 @@ void init_transport(){
 #define MAX_PACKET_ELEMENTS 5000
 #define ACK_SIZE 9
 char* ack = "RECEIVED";
-
-
-comm_entry transmit_entries[NUM_TILES_X*NUM_TILES_Y];
-comm_entry receive_entries[NUM_TILES_X*NUM_TILES_Y];
 
 
 void send_boundry(float* data, int size, int device_id_x, int device_id_y){

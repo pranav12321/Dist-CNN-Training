@@ -2,6 +2,10 @@
 #include "fused_device.h"
 #include "transport.h"
 
+extern int NUM_TILES_X;
+extern int NUM_TILES_Y;
+extern int DEVICE_ID_X;
+extern int DEVICE_ID_Y;
 
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,

@@ -8,32 +8,32 @@
 	void init_server();
 	void * route_client_links(void *vargp);
 #endif
-void init_transport();
+void init_transport(char* argv[]);
 void send_boundry(float*, int, int, int);
 void receive_boundry(float*, int, int, int);
 
 //#define SERVER 1
 #define CLIENT 1
 
-#define DEVICE_ID_X 3
-#define DEVICE_ID_Y 3
+// #define DEVICE_ID_X 3
+// #define DEVICE_ID_Y 3
 
-#define DEVICE_0000_IP "127.0.0.1"
-#define DEVICE_0001_IP "127.0.0.1"
-#define DEVICE_0010_IP "127.0.0.1"
-#define DEVICE_0011_IP "127.0.0.1"
-#define DEVICE_0100_IP "127.0.0.1"
-#define DEVICE_0101_IP "127.0.0.1"
-#define DEVICE_0110_IP "127.0.0.1"
-#define DEVICE_0111_IP "127.0.0.1"
-#define DEVICE_1000_IP "127.0.0.1"
-#define DEVICE_1001_IP "127.0.0.1"
-#define DEVICE_1010_IP "127.0.0.1"
-#define DEVICE_1011_IP "127.0.0.1"
-#define DEVICE_1100_IP "127.0.0.1"
-#define DEVICE_1101_IP "127.0.0.1"
-#define DEVICE_1110_IP "127.0.0.1"
-#define DEVICE_1111_IP "127.0.0.1"
+// #define DEVICE_0000_IP "192.168.4.5"
+// #define DEVICE_0001_IP "192.168.4.5"
+// #define DEVICE_0010_IP "192.168.4.12"
+// #define DEVICE_0011_IP "192.168.4.12"
+// #define DEVICE_0100_IP "192.168.4.5"
+// #define DEVICE_0101_IP "192.168.4.5"
+// #define DEVICE_0110_IP "192.168.4.12"
+// #define DEVICE_0111_IP "192.168.4.12"
+// #define DEVICE_1000_IP "192.168.4.2"
+// #define DEVICE_1001_IP "192.168.4.2"
+// #define DEVICE_1010_IP "192.168.4.9"
+// #define DEVICE_1011_IP "192.168.4.9"
+// #define DEVICE_1100_IP "192.168.4.2"
+// #define DEVICE_1101_IP "192.168.4.2"
+// #define DEVICE_1110_IP "192.168.4.9"
+// #define DEVICE_1111_IP "192.168.4.9"
 // #define NUM_TILES_X 2
 // #define NUM_TILES_Y 2
 
