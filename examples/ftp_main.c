@@ -1702,12 +1702,12 @@ int main(int argc, char* argv[]){
     //main_distributed();
     //main_reference();
     //main_maxpool();
-    for (int i = 1; i < argc; i++)
-    {
-        printf("argv[%u] = %s\n", i, argv[i]);
-        if (argv[i][0] == '-')
-        {
-        }
-    }
-    //main_yolo();
+    // for (int i = 1; i < argc; i++)
+    // {
+    //     printf("argv[%u] = %s\n", i, argv[i]);
+    //     if (argv[i][0] == '-')
+    //     {
+    //     }
+    // }
+    main_yolo();
 }

@@ -148,7 +148,7 @@ void init_transport(char* argv[]){
             // assign IP, PORT
             servaddr.sin_family = AF_INET;
             servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-            servaddr.sin_port = htons(PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + 4*(DEVICE_ID_Y)) + i + 300*j);
+            servaddr.sin_port = htons(PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + (NUM_TILES_X)*(DEVICE_ID_Y)) + i + 300*j);
 
             // Binding newly created socket to given IP and verification
             if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
@@ -164,7 +164,7 @@ void init_transport(char* argv[]){
                 exit(0);
             }
             else
-                printf("Server listening for client %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + 4*(DEVICE_ID_Y)) + i + 300*j);
+                printf("Server listening for client %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + (NUM_TILES_X)*(DEVICE_ID_Y)) + i + 300*j);
             len = sizeof(cli);
 
             // Accept the data packet from client and verification
@@ -174,7 +174,7 @@ void init_transport(char* argv[]){
                 exit(0);
             }
             else
-                printf("server %d %d successfully accepted the client %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + 4*(DEVICE_ID_Y)) + i + 300*j);
+                printf("server %d %d successfully accepted the client %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*((DEVICE_ID_X) + (NUM_TILES_X)*(DEVICE_ID_Y)) + i + 300*j);
 
             cs->socket_fd[j] = connfd;
             cs->endpoint_type = 1;
@@ -219,9 +219,9 @@ void init_transport(char* argv[]){
             // assign IP, PORT
             servaddr.sin_family = AF_INET;
             servaddr.sin_addr.s_addr = inet_addr(ip);
-            servaddr.sin_port = htons(PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*4 + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*300);
+            servaddr.sin_port = htons(PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*(NUM_TILES_X) + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*300);
 
-            printf("Attempting to connect to server %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*4 + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*300);
+            printf("Attempting to connect to server %d %d on port %d\n", i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*(NUM_TILES_X) + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y) + j*300);
          
             // connect the client socket to server socket
             while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
@@ -230,7 +230,7 @@ void init_transport(char* argv[]){
                 //exit(0);
             }
             //else
-            printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*4 + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y)  + j*300);
+            printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", DEVICE_ID_X, DEVICE_ID_Y, i%NUM_TILES_X, i/NUM_TILES_X, PORT + (NUM_TILES_X*NUM_TILES_Y)*(((i>>2) & 0x3)*(NUM_TILES_X) + (i & 0x3)) + (DEVICE_ID_X + NUM_TILES_X*DEVICE_ID_Y)  + j*300);
 
 
             int flags = fcntl(sockfd, F_GETFL, 0);
