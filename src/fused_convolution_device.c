@@ -685,7 +685,20 @@ void assemble_backward_group_data_device(network* net,
         float* transmit_data;
         int transmit_size;
 
-        float* src_structure = (current_layer_idx == (num_layers-1)) ? OUTPUT_DELTA : (net->layers[current_layer_idx].delta_without_boundry);
+        float* src_structure = (current_layer_idx == (num_layers-1)) ? OUTPUT_DELTA : (net->layers[current_layer_idx].delta);
+
+                int l = current_layer_idx;
+                    for (int m = 0; m < tile_delta_in_height; ++m)
+                    {
+                        for (int n = 0; n < tile_delta_in_width; ++n)
+                        {
+                            printf("%.2f ", net->layers[l].delta[m*tile_delta_in_width + n]);
+                        }
+                        printf("\n");
+                        
+                    }
+                    printf("\n");
+                
 
         memcpy(net->workspace, net->layers[current_layer_idx].delta, tile_delta_in_height*tile_delta_in_width*depth*sizeof(float));
         for (int c = 0; c < depth; ++c)

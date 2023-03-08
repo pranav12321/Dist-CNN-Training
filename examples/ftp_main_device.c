@@ -15,13 +15,18 @@ int DEVICE_ID_X;
 int DEVICE_ID_Y;
 
 
-// int stride_vector[16] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1};
-// int filter_stack_vector[16] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256, 256, 512, 256, 512, 256};
-// int filter_size_vector[16] = {3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3, 3, 3, 1, 3, 1};
+int stride_vector[16] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1};
+int filter_stack_vector[16] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256, 256, 512, 256, 512, 256};
+LAYER_TYPE layer_vector[16] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
+                               CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL,
+                               CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
+int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 3, 3, 1, 3, 1};
 
-int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
-int filter_stack_vector[11] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256};
-int filter_size_vector[11] = {3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3};
+// int stride_vector[11] = {1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 1};
+// int filter_stack_vector[11] = {32, 32, 64, 64, 128, 64, 128, 128, 256, 128, 256};
+// LAYER_TYPE layer_vector[11] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
+//                                CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
+// int filter_size_vector[11] = {3, 3, 3, 3, 3, 1, 1, 3, 3, 1, 3};
 
 int sync_group_vector[11] = {1, 1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1};
 
@@ -52,7 +57,7 @@ int main_device(int argc, char* argv[]){
     #endif
 
     profile.num_forward_groups = 1;
-    profile.num_backward_groups = 1;
+    profile.num_backward_groups = 6;
 
     profile.fp = calloc(profile.num_forward_groups, sizeof(group_profile_forward));
     profile.bp = calloc(profile.num_backward_groups, sizeof(group_profile_backward));
@@ -139,26 +144,62 @@ int main_device(int argc, char* argv[]){
     // profile.fp[10].end_x_forward = 37;
     // profile.fp[10].end_y_forward = 37;
 
-    profile.bp[0].layer_start_idx = 0;
-    profile.bp[0].layer_end_idx = 10;
+    // profile.bp[0].layer_start_idx = 0;
+    // profile.bp[0].layer_end_idx = 0;
+    // profile.bp[0].start_x_backward = 0;
+    // profile.bp[0].start_y_backward = 0;
+    // profile.bp[0].end_x_backward = 303;//151;
+    // profile.bp[0].end_y_backward = 303;
+
+    profile.bp[0].layer_start_idx = 1;
+    profile.bp[0].layer_end_idx = 1;
     profile.bp[0].start_x_backward = 0;
     profile.bp[0].start_y_backward = 0;
-    profile.bp[0].end_x_backward = (INPUT_WIDTH/NUM_TILES_X) - 1;//151;
-    profile.bp[0].end_y_backward = (INPUT_HEIGHT/NUM_TILES_Y) - 1;;
+    profile.bp[0].end_x_backward = 303;
+    profile.bp[0].end_y_backward = 303;
 
-    // profile.bp[1].layer_start_idx = 4;
-    // profile.bp[1].layer_end_idx = 5;
-    // profile.bp[1].start_x_backward = 0;
-    // profile.bp[1].start_y_backward = 0;
-    // profile.bp[1].end_x_backward = 5;
-    // profile.bp[1].end_y_backward = 5;
+    profile.bp[1].layer_start_idx = 2;
+    profile.bp[1].layer_end_idx = 2;
+    profile.bp[1].start_x_backward = 0;
+    profile.bp[1].start_y_backward = 0;
+    profile.bp[1].end_x_backward = 151;
+    profile.bp[1].end_y_backward = 151;
 
-    // profile.bp[2].layer_start_idx = 6;
-    // profile.bp[2].layer_end_idx = 7;
-    // profile.bp[2].start_x_backward = 0;
-    // profile.bp[2].start_y_backward = 0;
-    // profile.bp[2].end_x_backward = 2;
-    // profile.bp[2].end_y_backward = 2;
+    profile.bp[2].layer_start_idx = 3;
+    profile.bp[2].layer_end_idx = 3;
+    profile.bp[2].start_x_backward = 0;
+    profile.bp[2].start_y_backward = 0;
+    profile.bp[2].end_x_backward = 151;
+    profile.bp[2].end_y_backward = 151;
+
+    profile.bp[3].layer_start_idx = 4;
+    profile.bp[3].layer_end_idx = 6;
+    profile.bp[3].start_x_backward = 0;
+    profile.bp[3].start_y_backward = 0;
+    profile.bp[3].end_x_backward = 75;
+    profile.bp[3].end_y_backward = 75;
+
+    profile.bp[4].layer_start_idx = 7;
+    profile.bp[4].layer_end_idx = 7;
+    profile.bp[4].start_x_backward = 0;
+    profile.bp[4].start_y_backward = 0;
+    profile.bp[4].end_x_backward = 75;
+    profile.bp[4].end_y_backward = 75;
+
+    profile.bp[5].layer_start_idx = 8;
+    profile.bp[5].layer_end_idx = 10;
+    profile.bp[5].start_x_backward = 0;
+    profile.bp[5].start_y_backward = 0;
+    profile.bp[5].end_x_backward = 37;
+    profile.bp[5].end_y_backward = 37;
+
+    // profile.bp[6].layer_start_idx = 12;
+    // profile.bp[6].layer_end_idx = 15;
+    // profile.bp[6].start_x_backward = 0;
+    // profile.bp[6].start_y_backward = 0;
+    // profile.bp[6].end_x_backward = 2;
+    // profile.bp[6].end_y_backward = 2;
+
 
     network* net = calloc(1, sizeof(network));
 
@@ -214,7 +255,13 @@ int main_device(int argc, char* argv[]){
             zero_out_edges_featuremap_device(net, l, NUM_TILES_Y, NUM_TILES_X, DEVICE_ID_Y, DEVICE_ID_X);
             net->index = l;
 
-            forward_convolutional_layer(net->layers[l], *net);
+            if(net->layers[l].type == CONVOLUTIONAL){
+                forward_convolutional_layer(net->layers[l], *net);
+            }
+
+            else if(net->layers[l].type == MAXPOOL){
+                forward_maxpool_layer(net->layers[l], *net);
+            }
 
             if(l == profile.fp[g].layer_start_idx){
                 free(net->input);
@@ -270,7 +317,7 @@ int main_device(int argc, char* argv[]){
         int start_idx = (g==0) ? 1 : profile.bp[g].layer_start_idx;
         for (int l = profile.bp[g].layer_end_idx; l >= start_idx; --l)
         {
-            printf("Layer %d\n", l);
+            printf("propagating at Layer %d\n", l);
 
             int unit_boundry = (net->layers[l].size / 2);
 
@@ -313,51 +360,65 @@ int main_device(int argc, char* argv[]){
             net->layers[l].out_w = net->layers[l].delta_in_w_with_boundry;
             net->layers[l].out_h = net->layers[l].delta_in_h_with_boundry;
 
+            printf("dims: %d %d %d %d\n", net->layers[l].w, net->layers[l].h, net->layers[l].out_w, net->layers[l].out_h);
+
             net->layers[l].pad = (net->layers[l].size - 1 - (( ( (net->layers[l].size/2) & 0x1 ) == 1 ) ? (net->layers[l].stride - 1) : 0));
             //Temporary hack: Fix this ASAP
-            if(l == 3)
-                net->layers[l].pad += 1;
+            // if(l == 3)
+            //     net->layers[l].pad += 1;
 
             zero_out_edges_delta_device(net, l, NUM_TILES_Y, NUM_TILES_X, DEVICE_ID_Y, DEVICE_ID_X);
 
-            backward_convolutional_layer_dist_delta(net->layers[l], *net);
+            if(net->layers[l].type == CONVOLUTIONAL)
+                backward_convolutional_layer_dist_delta(net->layers[l], *net);
+            else if(net->layers[l].type == MAXPOOL)
+                backward_maxpool_layer(net->layers[l], *net);
 
-            int x_dim = net->layers[l].delta_in_w_without_boundry;
-            int y_dim = net->layers[l].delta_in_h_without_boundry;
-            int depth = net->layers[l].n;
 
-            for (int c = 0; c < net->layers[l].n; ++c)
-            {
-                int x_dim_nob = net->layers[l].delta_in_w_with_boundry;
-                int y_dim_nob = net->layers[l].delta_in_h_with_boundry;
 
-                for (int m = 0; m < net->layers[l].delta_in_h_without_boundry; ++m)
+            if(net->layers[l].type == CONVOLUTIONAL){
+
+                int x_dim = net->layers[l].delta_in_w_without_boundry;
+                int y_dim = net->layers[l].delta_in_h_without_boundry;
+                int depth = net->layers[l].n;
+
+                for (int c = 0; c < net->layers[l].n; ++c)
                 {
-                    for (int n = 0; n < net->layers[l].delta_in_w_without_boundry; ++n)
-                    {
-                        int left_edges = net->layers[l].left_boundry_edges_delta;
-                        int right_edges = net->layers[l].right_boundry_edges_delta;
-                        int top_edges = net->layers[l].top_boundry_edges_delta;
-                        int bottom_edges = net->layers[l].bottom_boundry_edges_delta;
+                    int x_dim_nob = net->layers[l].delta_in_w_with_boundry;
+                    int y_dim_nob = net->layers[l].delta_in_h_with_boundry;
 
-                        net->workspace[(c*x_dim*y_dim) + m*net->layers[l].delta_in_w_without_boundry + n] = 
-                            net->layers[l].delta[(c*x_dim_nob*y_dim_nob) + (m+top_edges)*(net->layers[l].delta_in_w_with_boundry) + n + left_edges];
+                    for (int m = 0; m < net->layers[l].delta_in_h_without_boundry; ++m)
+                    {
+                        for (int n = 0; n < net->layers[l].delta_in_w_without_boundry; ++n)
+                        {
+                            int left_edges = net->layers[l].left_boundry_edges_delta;
+                            int right_edges = net->layers[l].right_boundry_edges_delta;
+                            int top_edges = net->layers[l].top_boundry_edges_delta;
+                            int bottom_edges = net->layers[l].bottom_boundry_edges_delta;
+
+                            net->workspace[(c*x_dim*y_dim) + m*net->layers[l].delta_in_w_without_boundry + n] = 
+                                net->layers[l].delta[(c*x_dim_nob*y_dim_nob) + (m+top_edges)*(net->layers[l].delta_in_w_with_boundry) + n + left_edges];
+                        }
                     }
                 }
+
+                memcpy(net->layers[l].delta, net->workspace, x_dim*y_dim*depth*sizeof(float));
+
+                net->layers[l].out_w = net->layers[l].delta_in_w_without_boundry;
+                net->layers[l].out_h = net->layers[l].delta_in_h_without_boundry;
+                net->layers[l].h = featuremap_without_boundry_height;
+                net->layers[l].w = featuremap_without_boundry_width;
+
+                net->layers[l].pad = 0;
+
+                net->index = l;
+
+                printf("filter layer %d \n", l);
+
+
+
+                backward_convolutional_layer_dist_filters(net->layers[l], *net);
             }
-
-            memcpy(net->layers[l].delta, net->workspace, x_dim*y_dim*depth*sizeof(float));
-
-            net->layers[l].out_w = net->layers[l].delta_in_w_without_boundry;
-            net->layers[l].out_h = net->layers[l].delta_in_h_without_boundry;
-            net->layers[l].h = featuremap_without_boundry_height;
-            net->layers[l].w = featuremap_without_boundry_width;
-
-            net->layers[l].pad = 0;
-
-            net->index = l;
-
-            backward_convolutional_layer_dist_filters(net->layers[l], *net);
 
         }
 
@@ -427,51 +488,6 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[1].weight_updates[m*3 + n]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (int m = 0; m < 3; ++m)
-            {
-                for (int n = 0; n < 3; ++n)
-                {
-                    printf("%.2f ", net->layers[1].weight_updates[9 + m*3 + n]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (int m = 0; m < 3; ++m)
-            {
-                for (int n = 0; n < 3; ++n)
-                {
-                    printf("%.2f ", net->layers[1].weight_updates[18 + m*3 + n]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-            for (int m = 0; m < 3; ++m)
-            {
-                for (int n = 0; n < 3; ++n)
-                {
-                    printf("%.2f ", net->layers[1].weight_updates[27 + m*3 + n]);
-                }
-                printf("\n");
-                
-            }
-            printf("\n");
-
-
-            for (int m = 0; m < 3; ++m)
-            {
-                for (int n = 0; n < 3; ++n)
-                {
                     printf("%.2f ", net->layers[2].weight_updates[m*3 + n]);
                 }
                 printf("\n");
@@ -513,12 +529,11 @@ int main_device(int argc, char* argv[]){
             printf("\n");
 
 
-
             for (int m = 0; m < 3; ++m)
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[m*3 + n]);
+                    printf("%.2f ", net->layers[4].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
@@ -529,7 +544,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[9 + m*3 + n]);
+                    printf("%.2f ", net->layers[4].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -540,7 +555,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[18 + m*3 + n]);
+                    printf("%.2f ", net->layers[4].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -551,7 +566,53 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.2f ", net->layers[3].weight_updates[27 + m*3 + n]);
+                    printf("%.2f ", net->layers[4].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[8].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[8].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[8].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[8].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -563,7 +624,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.4f ", net->layers[4].weight_updates[m*3 + n]);
+                    printf("%.4f ", net->layers[10].weight_updates[m*3 + n]);
                 }
                 printf("\n");
                 
@@ -574,7 +635,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.4f ", net->layers[4].weight_updates[9 + m*3 + n]);
+                    printf("%.4f ", net->layers[10].weight_updates[9 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -585,7 +646,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.4f ", net->layers[4].weight_updates[18 + m*3 + n]);
+                    printf("%.4f ", net->layers[10].weight_updates[18 + m*3 + n]);
                 }
                 printf("\n");
                 
@@ -596,7 +657,7 @@ int main_device(int argc, char* argv[]){
             {
                 for (int n = 0; n < 3; ++n)
                 {
-                    printf("%.4f ", net->layers[4].weight_updates[27 + m*3 + n]);
+                    printf("%.4f ", net->layers[10].weight_updates[27 + m*3 + n]);
                 }
                 printf("\n");
                 

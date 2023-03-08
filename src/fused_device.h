@@ -2,6 +2,7 @@
 #define FUSED_DEVICE
 #include "darknet.h"
 #include "convolutional_layer.h"
+#include "maxpool_layer.h"
 
 void compute_tile_boundries(network* net,
                             int DEVICE_ID_X, int DEVICE_ID_Y,

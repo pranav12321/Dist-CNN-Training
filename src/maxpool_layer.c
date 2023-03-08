@@ -29,6 +29,7 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
     l.pad = padding;
     l.out_w = (w + padding - size)/stride + 1;
     l.out_h = (h + padding - size)/stride + 1;
+    printf("size = %d %d %d %d %d\n", size, h, w, l.out_h, l.out_w);
     l.out_c = c;
     l.outputs = l.out_h * l.out_w * l.out_c;
     l.inputs = h*w*c;

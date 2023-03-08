@@ -201,6 +201,12 @@ void partition_backward(network* net,
     {
 
         int stride = net->layers[i].stride;
+        int filter_size = net->layers[i].size;
+        unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
+
+        if(net->layers[i].type == MAXPOOL){
+            unit_boundry = 0;
+        }
 
         if(i == start_idx){
             left_boundry_edges = 0;
@@ -211,11 +217,21 @@ void partition_backward(network* net,
 
         else{
 
-            left_boundry_edges = (unit_boundry + net->layers[i-1].left_boundry_edges_delta) /(net->layers[i].stride);
-            top_boundry_edges = (unit_boundry + net->layers[i-1].top_boundry_edges_delta) /(net->layers[i].stride);
+            if(net->layers[i].type == CONVOLUTIONAL){
+                left_boundry_edges = (unit_boundry + net->layers[i-1].left_boundry_edges_delta) /(net->layers[i].stride);
+                top_boundry_edges = (unit_boundry + net->layers[i-1].top_boundry_edges_delta) /(net->layers[i].stride);
 
-            right_boundry_edges = (unit_boundry + net->layers[i-1].right_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
-            bottom_boundry_edges = (unit_boundry + net->layers[i-1].bottom_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
+                right_boundry_edges = (unit_boundry + net->layers[i-1].right_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
+                bottom_boundry_edges = (unit_boundry + net->layers[i-1].bottom_boundry_edges_delta + net->layers[i].stride - 1) /(net->layers[i].stride);
+            }
+            else if(net->layers[i].type == MAXPOOL){
+                left_boundry_edges = net->layers[i-1].left_boundry_edges_delta;
+                top_boundry_edges = net->layers[i-1].top_boundry_edges_delta;
+
+                right_boundry_edges = net->layers[i-1].right_boundry_edges_delta;
+                bottom_boundry_edges = net->layers[i-1].bottom_boundry_edges_delta;
+            }
+
         }
         // net->layers[i].left_boundry_edges_delta = left_boundry_edges;
         // net->layers[i].top_boundry_edges_delta = top_boundry_edges;
