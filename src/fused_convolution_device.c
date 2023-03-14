@@ -121,7 +121,7 @@ void get_backward_group_boundry_data_device(
 void assemble_forward_group_data_device(network* net, 
                                 float* INPUT_IMAGE,
                                 int NUM_TILES_X, int NUM_TILES_Y,
-								 group_profile_forward group,
+								 int group_start_idx,
                                  int device_id_x, int device_id_y
 								 ){
 
@@ -139,7 +139,7 @@ void assemble_forward_group_data_device(network* net,
         int tile_total_input_height = start_layer.featuremap_in_h_with_boundry;
         int tile_total_input_width = start_layer.featuremap_in_w_with_boundry;
 
-        int current_layer_idx = group.layer_start_idx;
+        int current_layer_idx = group_start_idx;
 
         int depth = start_layer.c;
 
@@ -191,11 +191,11 @@ void assemble_forward_group_data_device(network* net,
 
         float* group_initial_featuremap;
 
-        if(group.layer_start_idx == 0){
+        if(group_start_idx == 0){
             group_initial_featuremap = INPUT_IMAGE;
         }
         else{
-            group_initial_featuremap = net->layers[group.layer_start_idx - 1].output;
+            group_initial_featuremap = net->layers[group_start_idx].output;
         }
 
 

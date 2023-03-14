@@ -38,4 +38,63 @@ typedef struct train_groups_profile{
     group_profile_backward* bp;
 } train_groups_profile;
 
+#define MAX_LAYERS 28
+
+typedef struct dim{
+    int x_dim;
+    int y_dim;
+    int depth;
+} dim;
+
+typedef struct coordinate_bounds{
+    int start_x_coordinate;
+    int start_y_coordinate;
+    int end_x_coordinate;
+    int end_y_coordinate;
+    int start_depth_coordinate;
+    int end_depth_coordinate;
+} coordinate_bounds;
+
+typedef struct edges{
+    int left_boundry_edges;
+    int right_boundry_edges;
+    int top_boundry_edges;
+    int bottom_boundry_edges;
+} edges;
+
+typedef struct network_config{
+    int num_layers;
+    int INPUT_WIDTH;
+    int INPUT_HEIGHT;
+    int stride_vector[MAX_LAYERS];
+    int filter_size_vector[MAX_LAYERS];
+    int filter_stack_vector[MAX_LAYERS];
+    int back_pad[MAX_LAYERS];
+
+    LAYER_TYPE layer_type_vector[MAX_LAYERS];
+
+    dim featuremap_dim_without_boundry_vector[MAX_LAYERS];
+    dim delta_dim_without_boundry_vector[MAX_LAYERS];
+    dim featuremap_dim_with_boundry_vector[MAX_LAYERS];
+    dim delta_dim_with_boundry_vector[MAX_LAYERS];
+    coordinate_bounds featuremap_bounds_vector[MAX_LAYERS];
+    coordinate_bounds delta_bounds_vector[MAX_LAYERS];
+    edges featuremap_edges_vector[MAX_LAYERS];
+    edges delta_edges_vector[MAX_LAYERS];
+
+    coordinate_bounds spurious_blocks[MAX_LAYERS+1];
+} network_config;
+
+typedef struct ftp_config{
+    int NUM_TILES_X;
+    int NUM_TILES_Y;
+    int NUM_GROUPS_FORWARD;
+    int NUM_GROUPS_BACKWARD;
+    int DEVICE_ID_X;
+    int DEVICE_ID_Y;
+    int sync_group_vector_forward[MAX_LAYERS];
+    int sync_group_vector_backward[MAX_LAYERS];
+} ftp_config;
+
+
 #endif

@@ -13,7 +13,7 @@ void send_forward_group_boundry_data_device(network* net, float* INPUT_IMAGE,
 void assemble_forward_group_data_device(network* net, 
                                 float* INPUT_IMAGE,
                                 int NUM_TILES_X, int NUM_TILES_Y,
-                                 group_profile_forward group,
+                                 int group_start_idx,
                                  int DEVICE_ID_X, int DEVICE_ID_Y
                                  );
 
