@@ -25,7 +25,7 @@ void send_backward_group_boundry_data_device(network* net, float* OUTPUT_DELTA,
 void assemble_backward_group_data_device(network* net, 
                                 float* OUTPUT_DELTA,
                                 int NUM_TILES_X, int NUM_TILES_Y,
-                                 group_profile_backward group,
+                                 int group_end_idx,
                                  int DEVICE_ID_X, int DEVICE_ID_Y,
                                  int num_layers
                                  );

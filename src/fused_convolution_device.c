@@ -126,7 +126,7 @@ void assemble_forward_group_data_device(network* net,
 								 ){
 
 
-        layer start_layer = net->layers[group.layer_start_idx];
+        layer start_layer = net->layers[group_start_idx];
 
         int top_boundry_edges = start_layer.top_boundry_edges_featuremap;
         int bottom_boundry_edges = start_layer.bottom_boundry_edges_featuremap;
@@ -154,7 +154,6 @@ void assemble_forward_group_data_device(network* net,
         int transmit_size;
 
         float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output);
-
 
         int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
         int core_img_read_start_offset_y = (top_boundry_edges >= 0) ? 0 : (-1*top_boundry_edges);
@@ -195,7 +194,7 @@ void assemble_forward_group_data_device(network* net,
             group_initial_featuremap = INPUT_IMAGE;
         }
         else{
-            group_initial_featuremap = net->layers[group_start_idx].output;
+            group_initial_featuremap = net->layers[group_start_idx-1].output;
         }
 
 
@@ -619,6 +618,8 @@ void assemble_forward_group_data_device(network* net,
            free(boundry_bottom_right);
         }
 
+
+        // printf("INPUT \n");
         // for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
         // {
         //     for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
@@ -630,7 +631,7 @@ void assemble_forward_group_data_device(network* net,
 
         // printf("\n");
 
-        if(group.layer_start_idx > 0){
+        if(group_start_idx > 0){
 
             for (int c = 0; c < depth; ++c)
             {
@@ -638,7 +639,7 @@ void assemble_forward_group_data_device(network* net,
                 {
                     for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
                     {
-                        net->layers[group.layer_start_idx - 1].output[(c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j] = 
+                        net->layers[group_start_idx - 1].output[(c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j] = 
                             net->input[(c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j];
                     }
                 }  
@@ -652,12 +653,12 @@ void assemble_forward_group_data_device(network* net,
 void assemble_backward_group_data_device(network* net, 
                                 float* OUTPUT_DELTA,
                                 int NUM_TILES_X, int NUM_TILES_Y,
-                                 group_profile_backward group,
+                                 int group_end_idx,
                                  int device_id_x, int device_id_y,
                                  int num_layers
                                  ){
 
-        layer end_layer = net->layers[group.layer_end_idx];
+        layer end_layer = net->layers[group_end_idx];
 
         int top_boundry_edges = end_layer.top_boundry_edges_delta;
         int bottom_boundry_edges = end_layer.bottom_boundry_edges_delta;
@@ -671,16 +672,16 @@ void assemble_backward_group_data_device(network* net,
         int tile_total_delta_in_height = end_layer.delta_in_h_with_boundry;
         int tile_total_delta_in_width = end_layer.delta_in_w_with_boundry;
 
-        int current_layer_idx = group.layer_end_idx;
+        int current_layer_idx = group_end_idx;
 
-        int depth = end_layer.n;
+        int depth = (net->layers[group_end_idx].type == CONVOLUTIONAL) ? end_layer.n : end_layer.c;
 
         int delta_width = net->layers[current_layer_idx].delta_in_w_without_boundry;
         int delta_height = net->layers[current_layer_idx].delta_in_h_without_boundry;
 
         int x_dim = net->layers[current_layer_idx].delta_in_w_without_boundry;
         int y_dim = net->layers[current_layer_idx].delta_in_h_without_boundry;
-        int z_dim = net->layers[current_layer_idx].n;
+        int z_dim = (net->layers[current_layer_idx].type == CONVOLUTIONAL) ? net->layers[current_layer_idx].n : net->layers[current_layer_idx].c;
 
         float* transmit_data;
         int transmit_size;
@@ -688,16 +689,16 @@ void assemble_backward_group_data_device(network* net,
         float* src_structure = (current_layer_idx == (num_layers-1)) ? OUTPUT_DELTA : (net->layers[current_layer_idx].delta);
 
                 int l = current_layer_idx;
-                    for (int m = 0; m < tile_delta_in_height; ++m)
-                    {
-                        for (int n = 0; n < tile_delta_in_width; ++n)
-                        {
-                            printf("%.2f ", net->layers[l].delta[m*tile_delta_in_width + n]);
-                        }
-                        printf("\n");
+                    // for (int m = 0; m < tile_delta_in_height; ++m)
+                    // {
+                    //     for (int n = 0; n < tile_delta_in_width; ++n)
+                    //     {
+                    //         printf("%.2f ", net->layers[l].delta[m*tile_delta_in_width + n]);
+                    //     }
+                    //     printf("\n");
                         
-                    }
-                    printf("\n");
+                    // }
+                    // printf("\n");
                 
 
         memcpy(net->workspace, net->layers[current_layer_idx].delta, tile_delta_in_height*tile_delta_in_width*depth*sizeof(float));
@@ -711,6 +712,8 @@ void assemble_backward_group_data_device(network* net,
                 }
             }
         }
+
+        src_structure = net->workspace;
 
         // //Top left
         if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
@@ -967,6 +970,7 @@ void assemble_backward_group_data_device(network* net,
                     }
                 }
             }
+
            free(boundry_right);
         } 
 
@@ -1217,10 +1221,9 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 
 void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
 
-
     int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
-    int depth = net->layers[layer_idx].n;
+    int depth = (net->layers[layer_idx].type == CONVOLUTIONAL) ? net->layers[layer_idx].n : net->layers[layer_idx].c;
 
     if(layer_idx > 0){
 
