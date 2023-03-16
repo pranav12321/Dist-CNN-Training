@@ -1269,7 +1269,7 @@ int main_reference(){
 
 }
 
-#define LAYER_SIZE 64
+#define LAYER_SIZE 608
 #define FILTER_SIZE 32
 
 int main_yolo(){
@@ -1390,16 +1390,16 @@ int main_yolo(){
         net->input = net->layers[l].output;
 
 
-        for (size_t i = 0; i < net->layers[l].out_h; i++)
-        {
-            for (size_t j = 0; j < net->layers[l].out_w; j++)
-            {
-                printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
-            }
-            printf("\n");
+        // for (size_t i = 0; i < net->layers[l].out_h; i++)
+        // {
+        //     for (size_t j = 0; j < net->layers[l].out_w; j++)
+        //     {
+        //         printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
+        //     }
+        //     printf("\n");
             
-        }
-        printf("\n");
+        // }
+        // printf("\n");
 
         // for (size_t i = 0; i < 12; i++)
         // {
@@ -1425,16 +1425,18 @@ int main_yolo(){
 
         printf("Delta layer %d\n", l);
 
-        for (int m = 0; m < net->layers[l].out_h; ++m)
-        {
-            for (int n = 0; n < net->layers[l].out_w; ++n)
-            {
-                printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-            }
-            printf("\n");
+        // for (int m = 0; m < net->layers[l].out_h; ++m)
+        // {
+        //     for (int n = 0; n < net->layers[l].out_w; ++n)
+        //     {
+        //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
+        //     }
+        //     printf("\n");
             
-        }
-        printf("\n");
+        // }
+        // printf("\n");
+
+
 
 
     //     for (int m = 0; m < 12; ++m)
@@ -1449,8 +1451,22 @@ int main_yolo(){
     //     printf("\n");
     }
 
-
-
+        // for (int m = 0; m < net->layers[0].out_h; ++m)
+        // {
+        //     for (int n = 0; n < net->layers[0].out_w; ++n)
+        //     {
+        //         printf("%.2f ", net->layers[0].delta[m*net->layers[0].out_w + n]);
+        //     }
+        //     printf("\n");
+            
+        // }
+        // printf("\n");
+        net->index = 0;
+        net->input = calloc(net->inputs, sizeof(float));
+        fill_cpu(net->inputs, 0.1, net->input, 1);
+        net->delta = calloc(10000000, sizeof(float));
+        printf("Filter stacks = %d\n", net->layers[0].n);
+        net->layers[0].backward(net->layers[0], *net);
     //     printf("Delta layer 0\n");
 
     //     for (int m = 0; m < 12; ++m)
@@ -1702,6 +1718,65 @@ int main_yolo(){
                 
             }
             printf("\n");
+
+           int num;
+           FILE *fptr;
+
+           // use appropriate location if you are using MacOS or Linux
+           fptr = fopen("weights_reference.txt","w");
+
+           if(fptr == NULL)
+           {
+              printf("Error!");   
+              exit(1);             
+           }
+           int layer_cumulative_weights = 0;
+            for (int l = 0; l < net->n; ++l){
+
+                int num_filters = net->layers[l].n;
+                int filter_size = net->layers[l].size;
+                int channels = net->layers[l].c;
+
+                for (int c = 0; c < channels; ++c)
+                {
+                    for (int f = 0; f < num_filters; ++f)
+                    {                    
+                        for (int m = 0; m < filter_size; ++m)
+                        {
+                            for (int n = 0; n < filter_size; ++n)
+                            {
+                             fprintf(fptr,"%.4f ", net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
+                            }
+                            fprintf(fptr, "\n");
+                        }
+                        fprintf(fptr, "\n");
+                        fprintf(fptr, "\n");
+                    }
+                    fprintf(fptr, "\n");
+                    fprintf(fptr, "\n");
+                    fprintf(fptr, "\n");
+                }
+
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+
+                layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
+            }
+
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+
+           fclose(fptr);
+
+           return 0;
 }
 
 

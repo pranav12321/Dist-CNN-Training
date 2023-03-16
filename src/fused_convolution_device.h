@@ -33,6 +33,9 @@ void assemble_backward_group_data_device(network* net,
 void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int DEVICE_ID_Y, int DEVICE_ID_X);
 void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int DEVICE_ID_Y, int DEVICE_ID_X);
 
+void zero_out_spurious_edges_featuremap(network* net, int layer_idx);
+void zero_out_spurious_edges_delta(network* net, int layer_idx);
+
 #ifdef SERVER
 void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
 #endif

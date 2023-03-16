@@ -14,8 +14,8 @@ void config_init(int argc, char* argv[]){
                                    CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
     int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 3, 3, 1, 3, 1};
 
-    int INPUT_WIDTH = 64;
-    int INPUT_HEIGHT = 64;
+    int INPUT_WIDTH = 608;
+    int INPUT_HEIGHT = 608;
     int INPUT_CHANNELS = 3;
     int num_layers = 11;
 
@@ -219,7 +219,7 @@ void forward_pass(){
             spurious_x_edges = 0;
         }
 
-        network_params_tile.spurious_blocks[num_layers].start_x_coordinate = (xdim - spurious_x_edges);
+        network_params_tile.spurious_blocks[num_layers].start_x_coordinate = (spurious_x_edges > 0) ? (xdim - spurious_x_edges) : -1;
 
         xdim = network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].x_dim;
         spurious_x_edges = (ftp_params.NUM_TILES_X*(network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].x_dim)) - network_params_original.featuremap_dim_without_boundry_vector[num_layers-1].x_dim;
@@ -227,7 +227,7 @@ void forward_pass(){
         if(spurious_x_edges == xdim){
             spurious_x_edges = 0;
         }
-        network_params_tile.spurious_blocks[num_layers-1].start_x_coordinate = (xdim - spurious_x_edges);
+        network_params_tile.spurious_blocks[num_layers-1].start_x_coordinate = (spurious_x_edges > 0) ? (xdim - spurious_x_edges) : -1;
     }
 
     if(ftp_params.DEVICE_ID_Y == (ftp_params.NUM_TILES_Y - 1)){    
@@ -240,7 +240,7 @@ void forward_pass(){
             spurious_y_edges = 0;
         }
 
-        network_params_tile.spurious_blocks[num_layers].start_y_coordinate = (ydim - spurious_y_edges);
+        network_params_tile.spurious_blocks[num_layers].start_y_coordinate = (spurious_y_edges > 0) ? (ydim - spurious_y_edges) : -1;
 
         ydim = network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].y_dim;
         spurious_y_edges = (ftp_params.NUM_TILES_Y*(network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].y_dim)) - network_params_original.featuremap_dim_without_boundry_vector[num_layers-1].y_dim;
@@ -248,7 +248,7 @@ void forward_pass(){
         if(spurious_y_edges == ydim){
             spurious_y_edges = 0;
         }
-        network_params_tile.spurious_blocks[num_layers-1].start_y_coordinate = (ydim - spurious_y_edges);
+        network_params_tile.spurious_blocks[num_layers-1].start_y_coordinate = (spurious_y_edges > 0) ? (ydim - spurious_y_edges) : -1;
     }
 
     printf("Spurious x = %d Spurious y = %d\n", network_params_tile.spurious_blocks[num_layers].start_x_coordinate, network_params_tile.spurious_blocks[num_layers].start_y_coordinate);
@@ -272,7 +272,7 @@ void forward_pass(){
                 spurious_x_edges = 0;
             }
 
-            network_params_tile.spurious_blocks[i].start_x_coordinate = (xdim - spurious_x_edges);
+            network_params_tile.spurious_blocks[i].start_x_coordinate = spurious_x_edges > 0 ? (xdim - spurious_x_edges) : -1;
         }
 
         if(ftp_params.DEVICE_ID_Y == (ftp_params.NUM_TILES_Y - 1)){
@@ -285,7 +285,7 @@ void forward_pass(){
                 spurious_y_edges = 0;
             }
 
-            network_params_tile.spurious_blocks[i].start_y_coordinate = (ydim - spurious_y_edges);
+            network_params_tile.spurious_blocks[i].start_y_coordinate = (spurious_y_edges > 0) ? (ydim - spurious_y_edges) : -1;
         }
         printf("Spurious x = %d Spurious y = %d\n", network_params_tile.spurious_blocks[i].start_x_coordinate, network_params_tile.spurious_blocks[i].start_y_coordinate);
     }
@@ -472,6 +472,14 @@ void backward_pass(){
 
         }
     }
+
+    network_params_tile.delta_dim_with_boundry_vector[0].x_dim = network_params_tile.delta_dim_without_boundry_vector[0].x_dim; 
+    network_params_tile.delta_dim_with_boundry_vector[0].y_dim = network_params_tile.delta_dim_without_boundry_vector[0].y_dim; 
+
+    network_params_tile.delta_edges_vector[0].right_boundry_edges = 0;
+    network_params_tile.delta_edges_vector[0].left_boundry_edges = 0;
+    network_params_tile.delta_edges_vector[0].bottom_boundry_edges = 0;
+    network_params_tile.delta_edges_vector[0].top_boundry_edges = 0;
 
         // printf("Layer %d \n\n", i);
         // printf("DELTA H with boundry/without boundry = %d %d\n", net->layers[i].delta_in_h_with_boundry, net->layers[i].delta_in_h_without_boundry);

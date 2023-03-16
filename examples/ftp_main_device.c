@@ -15,6 +15,8 @@ extern network_config network_params_original;
 extern network_config network_params_tile;
 extern ftp_config ftp_params;
 
+void backprop_layer0(network* net, float* INPUT_BOUNDRY);
+
 int main_device(int argc, char* argv[]){
 
     // NUM_TILES_X = atoi(argv[1]);
@@ -55,6 +57,11 @@ int main_device(int argc, char* argv[]){
     fill_cpu(net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
     fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
 
+    net->inputs = net->layers[0].featuremap_in_h_with_boundry*
+                    net->layers[0].featuremap_in_w_with_boundry*
+                    net->layers[0].c;
+
+    float* INPUT_BOUNDRY = calloc(net->inputs, sizeof(float));
 
 
     for (int g = 0; g < ftp_params.NUM_GROUPS_FORWARD; ++g)
@@ -70,8 +77,8 @@ int main_device(int argc, char* argv[]){
 
         net->input = calloc(net->inputs, sizeof(float));
 
-        printf("%d %d %d %d\n", net->layers[group_start_idx].top_boundry_edges_featuremap, net->layers[group_start_idx].bottom_boundry_edges_featuremap, net->layers[group_start_idx].right_boundry_edges_featuremap, 
-                        net->layers[group_start_idx].left_boundry_edges_featuremap);
+       // printf("%d %d %d %d\n", net->layers[group_start_idx].top_boundry_edges_featuremap, net->layers[group_start_idx].bottom_boundry_edges_featuremap, net->layers[group_start_idx].right_boundry_edges_featuremap, 
+        //                net->layers[group_start_idx].left_boundry_edges_featuremap);
 
         //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -80,6 +87,9 @@ int main_device(int argc, char* argv[]){
                                          group_start_idx,
                                          ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y
                                          );
+        if(g == 0){
+            memcpy(INPUT_BOUNDRY, net->input, net->inputs*sizeof(float));
+        }
 
         printf("Received input boundary. Starting inference\n");
 
@@ -87,6 +97,7 @@ int main_device(int argc, char* argv[]){
         {
 
             zero_out_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            zero_out_spurious_edges_featuremap(net, l);
             net->index = l;
 
             if(net->layers[l].type == CONVOLUTIONAL){
@@ -114,6 +125,7 @@ int main_device(int argc, char* argv[]){
             net->input = net->layers[l].output;
         }
     }
+    // zero_out_spurious_edges_featuremap(net, net->n);
 
     for (int i = 0; i < net->layers[10].out_h; ++i)
     {
@@ -194,85 +206,34 @@ int main_device(int argc, char* argv[]){
             printf("dims: %d %d %d %d\n", net->layers[l].w, net->layers[l].h, net->layers[l].out_w, net->layers[l].out_h);
 
             zero_out_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            zero_out_spurious_edges_delta(net, l);
 
             if(net->layers[l].type == CONVOLUTIONAL)
                 backward_convolutional_layer_dist_delta(net->layers[l], *net);
             else if(net->layers[l].type == MAXPOOL)
                 backward_maxpool_layer(net->layers[l], *net);
 
-            for (int m = 0; m < net->layers[l].out_h; ++m)
-            {
-                for (int n = 0; n < net->layers[l].out_w; ++n)
-                {
-                    printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-                }
-                printf("\n");
+            // for (int m = 0; m < net->layers[l].out_h; ++m)
+            // {
+            //     for (int n = 0; n < net->layers[l].out_w; ++n)
+            //     {
+            //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
+            //     }
+            //     printf("\n");
                 
-            }
-            printf("\n");
+            // }
+            // printf("\n");
 
-            for (int m = 0; m < net->layers[l].h; ++m)
-            {
-                for (int n = 0; n < net->layers[l].w; ++n)
-                {
-                    printf("%.2f ", net->layers[l-1].delta[m*net->layers[l].w + n]);
-                }
-                printf("\n");
+            // for (int m = 0; m < net->layers[l].h; ++m)
+            // {
+            //     for (int n = 0; n < net->layers[l].w; ++n)
+            //     {
+            //         printf("%.2f ", net->layers[l-1].delta[m*net->layers[l].w + n]);
+            //     }
+            //     printf("\n");
                 
-            }
-            printf("\n");
-
-            if(l == 8){
-                // for (int c = 0; c < net->layers[l].c; ++c)
-                // {
-                //     printf("c = %d\n", c);
-                //     for (int m = 0; m < net->layers[l].h; ++m)
-                //     {
-                //         for (int n = 0; n < net->layers[l].w; ++n)
-                //         {
-                //             printf("%.2f ", net->layers[l-1].delta[(net->layers[l].w*net->layers[l].h*c) + m*net->layers[l].w + n]);
-                //         }
-                //         printf("\n");
-                        
-                //     }
-                //     printf("\n");
-                // }
-
-                // for (int c = 0; c < net->layers[l].n; ++c)
-                // {
-                //     printf("c = %d\n", c);
-                //     for (int m = 0; m < net->layers[l].out_h; ++m)
-                //     {
-                //         for (int n = 0; n < net->layers[l].out_w; ++n)
-                //         {
-                //             printf("%.2f ", net->layers[l].delta[(net->layers[l].out_w*net->layers[l].out_h*c) + m*net->layers[l].out_w + n]);
-                //         }
-                //         printf("\n");
-                        
-                //     }
-                //     printf("\n");
-                // }
-
-                // for (int c = 0; c < net->layers[l].n; ++c)
-                // {
-                //     printf("c = %d\n", c);
-                //     for (int m = 0; m < net->layers[l].c; ++m)
-                //     {
-                //         for (int n = 0; n < (net->layers[l].size * net->layers[l].size); ++n)
-                //         {
-                //             if((net->layers[l].weights[(net->layers[l].c*net->layers[l].size*net->layers[l].size*c) + (m*net->layers[l].size*net->layers[l].size) + n]) != (float)0.01)
-                //                 printf("%.4f ", net->layers[l].weights[(net->layers[l].c*net->layers[l].size*net->layers[l].size*c) + (m*net->layers[l].size*net->layers[l].size) + n]);
-                //         }
-                //         // printf("\n");
-                        
-                //     }
-                //     printf("\n");
-                // }
-
-                // while(1);
-            }
-
-
+            // }
+            // printf("\n");
 
             if(net->layers[l].type == CONVOLUTIONAL){
 
@@ -320,6 +281,8 @@ int main_device(int argc, char* argv[]){
         }
 
     }
+
+    backprop_layer0(net, INPUT_BOUNDRY);
 
     free(OUTPUT_DELTA);
 
@@ -561,8 +524,122 @@ int main_device(int argc, char* argv[]){
             }
             printf("\n");
 
+           FILE *fptr;
+
+           fptr = fopen("weights_device.txt","w");
+
+           if(fptr == NULL)
+           {
+              printf("Error!");   
+              exit(1);             
+           }
+           int layer_cumulative_weights = 0;
+
+            for (int l = 0; l < net->n; ++l){
+
+                int num_filters = net->layers[l].n;
+                int filter_size = net->layers[l].size;
+                int channels = net->layers[l].c;
+
+                for (int c = 0; c < channels; ++c)
+                {
+                    for (int f = 0; f < num_filters; ++f)
+                    {                    
+                        for (int m = 0; m < filter_size; ++m)
+                        {
+                            for (int n = 0; n < filter_size; ++n)
+                            {
+                             fprintf(fptr,"%.4f ", net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
+                            }
+                            fprintf(fptr, "\n");
+                        }
+                        fprintf(fptr, "\n");
+                        fprintf(fptr, "\n");
+                    }
+                    fprintf(fptr, "\n");
+                    fprintf(fptr, "\n");
+                    fprintf(fptr, "\n");
+                }
+
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+                fprintf(fptr, "\n");
+
+                layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
+            }
+
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+            fprintf(fptr, "\n");
+
+           fclose(fptr);
 
             printf("Done\n");
+
+}
+
+void backprop_layer0(network* net, float* INPUT_BOUNDRY){
+    int unit_boundry = (net->layers[0].size / 2);
+
+    int featuremap_without_boundry_width = net->layers[0].featuremap_in_w_without_boundry + (2*unit_boundry);
+    int featuremap_without_boundry_height = net->layers[0].featuremap_in_h_without_boundry + (2*unit_boundry);
+
+
+
+    for (int c = 0; c < net->layers[0].c; ++c)
+    {
+        for (int m = 0; m < featuremap_without_boundry_height; ++m)
+        {
+            for (int n = 0; n < featuremap_without_boundry_width; ++n)
+            {
+                int left_edges = net->layers[0].left_boundry_edges_featuremap;
+                int right_edges = net->layers[0].right_boundry_edges_featuremap;
+                int top_edges = net->layers[0].top_boundry_edges_featuremap;
+                int bottom_edges = net->layers[0].bottom_boundry_edges_featuremap;
+
+                int x_dim_nob = net->layers[0].featuremap_in_w_with_boundry;
+                int y_dim_nob = net->layers[0].featuremap_in_h_with_boundry;
+
+                net->workspace[(c*featuremap_without_boundry_width*featuremap_without_boundry_height) + m*featuremap_without_boundry_width + n] = 
+                    INPUT_BOUNDRY[(c*x_dim_nob*y_dim_nob) + (m+top_edges - unit_boundry)*(x_dim_nob) + n + left_edges - unit_boundry];
+
+            }
+        }
+    }
+
+    memcpy(INPUT_BOUNDRY, net->workspace, net->layers[0].c*featuremap_without_boundry_height*featuremap_without_boundry_width*sizeof(float));
+   
+    net->layers[0].out_w = net->layers[0].delta_in_w_with_boundry;
+    net->layers[0].out_h = net->layers[0].delta_in_h_with_boundry;
+    net->layers[0].h = featuremap_without_boundry_height;
+    net->layers[0].w = featuremap_without_boundry_width;
+
+    net->layers[0].pad = 0;
+
+    net->index = 0;
+
+    // for (int m = 0; m < net->layers[0].out_h; ++m)
+    // {
+    //     for (int n = 0; n < net->layers[0].out_w; ++n)
+    //     {
+    //         printf("%.2f ", net->layers[0].delta[m*net->layers[0].out_w + n]);
+    //     }
+    //     printf("\n");
+        
+    // }
+    // printf("\n");
+
+    net->input = INPUT_BOUNDRY;
+
+    printf("filter layer %d \n", 0);
+
+    backward_convolutional_layer_dist_filters(net->layers[0], *net);   
 }
 
 int main(int argc, char* argv[]){

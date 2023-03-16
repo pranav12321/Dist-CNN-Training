@@ -7,6 +7,10 @@ extern int NUM_TILES_Y;
 extern int DEVICE_ID_X;
 extern int DEVICE_ID_Y;
 
+extern network_config network_params_original;
+extern network_config network_params_tile;
+extern ftp_config ftp_params;
+
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     int current_layer_idx, 
@@ -1218,6 +1222,60 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 }
 
 
+void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
+
+    int x_dim = net->layers[layer_idx].featuremap_in_w_with_boundry;
+    int y_dim = net->layers[layer_idx].featuremap_in_h_with_boundry;
+    int depth = net->layers[layer_idx].c;
+
+    int device_id_y = ftp_params.DEVICE_ID_Y;
+    int device_id_x = ftp_params.DEVICE_ID_X;
+    int NUM_TILES_X = ftp_params.NUM_TILES_X;
+    int NUM_TILES_Y = ftp_params.NUM_TILES_Y;
+
+    if(layer_idx > 0){
+
+        if(device_id_x == (NUM_TILES_X - 1)){
+
+            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
+            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
+
+            if(start_x_coordinate > -1){
+                for (int c = 0; c < depth; ++c)
+                {
+                    for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+                    {
+                        for (int n = net->layers[layer_idx].left_boundry_edges_featuremap + start_x_coordinate; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(device_id_y == (NUM_TILES_Y - 1)){
+
+            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
+            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
+
+            if(start_y_coordinate > -1){
+                for (int c = 0; c < depth; ++c)
+                {
+                    for (int m = net->layers[layer_idx].top_boundry_edges_featuremap + start_y_coordinate; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+                    {
+                        for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+
+    }    
+}
+
 
 void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
 
@@ -1284,6 +1342,57 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
         }
 
     }    
+}
+
+
+void zero_out_spurious_edges_delta(network* net, int layer_idx){
+
+    int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
+    int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
+    int depth = (net->layers[layer_idx].type == CONVOLUTIONAL) ? net->layers[layer_idx].n : net->layers[layer_idx].c;
+
+    int device_id_y = ftp_params.DEVICE_ID_Y;
+    int device_id_x = ftp_params.DEVICE_ID_X;
+    int NUM_TILES_X = ftp_params.NUM_TILES_X;
+    int NUM_TILES_Y = ftp_params.NUM_TILES_Y;
+
+        if(device_id_x == (NUM_TILES_X - 1)){
+
+            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
+            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
+
+            if(start_x_coordinate > -1){
+                for (int c = 0; c < depth; ++c)
+                {
+                    for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
+                    {
+                        for (int n = net->layers[layer_idx].left_boundry_edges_delta + start_x_coordinate; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(device_id_y == (NUM_TILES_Y - 1)){
+
+            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
+            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
+
+            if(start_y_coordinate > -1){
+                for (int c = 0; c < depth; ++c)
+                {
+                    for (int m = net->layers[layer_idx].top_boundry_edges_delta + start_y_coordinate; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
+                    {
+                        for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                        }
+                    }
+                }
+            }
+        }
 }
 
 void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
