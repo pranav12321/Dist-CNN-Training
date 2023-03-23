@@ -31,8 +31,8 @@ void config_init(int argc, char* argv[]){
     network_params_tile.INPUT_HEIGHT = INPUT_HEIGHT;
     network_params_original.INPUT_HEIGHT = INPUT_HEIGHT;
 
-    ftp_params.NUM_TILES_Y = NUM_TILES_Y;
-    ftp_params.NUM_TILES_X = NUM_TILES_X;
+    ftp_params.NUM_TILES_Y = atoi(argv[2]);
+    ftp_params.NUM_TILES_X = atoi(argv[1]);
 
     network_params_original.featuremap_dim_without_boundry_vector[0].x_dim = INPUT_WIDTH;
     network_params_original.featuremap_dim_without_boundry_vector[0].y_dim = INPUT_HEIGHT;
@@ -111,9 +111,13 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_backward[9] = 10;
 
    // ftp_params.sync_group_vector_backward[0] = 10;
-
-    ftp_params.DEVICE_ID_X = atoi(argv[1]);
-    ftp_params.DEVICE_ID_Y = atoi(argv[2]);
+    // printf("%d\n", ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3);
+    // printf("%d\n", ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 4);
+    // printf("%s\n", argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 2 ]);
+    // printf("%s\n", argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3 ]);
+    // while(1);
+    ftp_params.DEVICE_ID_X = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3 ]);
+    ftp_params.DEVICE_ID_Y = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 4 ]);
 
     //for (int i = 0; i < ftp_params.NUM_GROUPS_FORWARD; ++i)
     //{

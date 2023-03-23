@@ -1233,47 +1233,51 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
     int NUM_TILES_X = ftp_params.NUM_TILES_X;
     int NUM_TILES_Y = ftp_params.NUM_TILES_Y;
 
-    if(layer_idx > 0){
+    float* featuremap;
 
-        if(device_id_x == (NUM_TILES_X - 1)){
+    // if(layer_idx > 0)
+    //     featuremap = net->layers[layer_idx-1].output;
+    // else
+        featuremap = net->input;
 
-            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
-            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
+    if(device_id_x == (NUM_TILES_X - 1)){
 
-            if(start_x_coordinate > -1){
-                for (int c = 0; c < depth; ++c)
+        int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
+        int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
+
+        if(start_x_coordinate > -1){
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                 {
-                    for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+                    for (int n = net->layers[layer_idx].left_boundry_edges_featuremap + start_x_coordinate; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
                     {
-                        for (int n = net->layers[layer_idx].left_boundry_edges_featuremap + start_x_coordinate; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
-                        {
-                            net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
-                        }
+                        featuremap[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
                     }
                 }
             }
         }
+    }
 
-        if(device_id_y == (NUM_TILES_Y - 1)){
+    if(device_id_y == (NUM_TILES_Y - 1)){
 
-            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
-            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
+        int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx].start_x_coordinate;
+        int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
 
-            if(start_y_coordinate > -1){
-                for (int c = 0; c < depth; ++c)
+        if(start_y_coordinate > -1){
+            for (int c = 0; c < depth; ++c)
+            {
+                for (int m = net->layers[layer_idx].top_boundry_edges_featuremap + start_y_coordinate; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                 {
-                    for (int m = net->layers[layer_idx].top_boundry_edges_featuremap + start_y_coordinate; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+                    for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
                     {
-                        for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
-                        {
-                            net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
-                        }
+                        featuremap[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
                     }
                 }
             }
         }
-
-    }    
+    }
+   
 }
 
 

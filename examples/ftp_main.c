@@ -1269,7 +1269,7 @@ int main_reference(){
 
 }
 
-#define LAYER_SIZE 608
+#define LAYER_SIZE 64
 #define FILTER_SIZE 32
 
 int main_yolo(){
@@ -1390,16 +1390,16 @@ int main_yolo(){
         net->input = net->layers[l].output;
 
 
-        // for (size_t i = 0; i < net->layers[l].out_h; i++)
-        // {
-        //     for (size_t j = 0; j < net->layers[l].out_w; j++)
-        //     {
-        //         printf("%.2f ", net->layers[l].output[i*net->layers[l].out_w + j]);
-        //     }
-        //     printf("\n");
+        for (size_t i = 0; i < net->layers[l].out_h; i++)
+        {
+            for (size_t j = 0; j < net->layers[l].out_w; j++)
+            {
+                printf("%.4f ", net->layers[l].output[i*net->layers[l].out_w + j]);
+            }
+            printf("\n");
             
-        // }
-        // printf("\n");
+        }
+        printf("\n");
 
         // for (size_t i = 0; i < 12; i++)
         // {
@@ -1425,16 +1425,16 @@ int main_yolo(){
 
         printf("Delta layer %d\n", l);
 
-        // for (int m = 0; m < net->layers[l].out_h; ++m)
-        // {
-        //     for (int n = 0; n < net->layers[l].out_w; ++n)
-        //     {
-        //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-        //     }
-        //     printf("\n");
+        for (int m = 0; m < net->layers[l].out_h; ++m)
+        {
+            for (int n = 0; n < net->layers[l].out_w; ++n)
+            {
+                printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
+            }
+            printf("\n");
             
-        // }
-        // printf("\n");
+        }
+        printf("\n");
 
 
 
