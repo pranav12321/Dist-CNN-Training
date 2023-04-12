@@ -15,6 +15,8 @@ extern network_config network_params_original;
 extern network_config network_params_tile;
 extern ftp_config ftp_params;
 
+extern int is_device_representative_tile;
+
 void backprop_layer0(network* net, float* INPUT_BOUNDRY);
 
 int main_device(int argc, char* argv[]){
@@ -74,7 +76,6 @@ int main_device(int argc, char* argv[]){
                         net->layers[group_start_idx].c;
 
         net->input = calloc(net->inputs, sizeof(float));
-        sleep(5);
 
         //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -175,8 +176,6 @@ int main_device(int argc, char* argv[]){
     {
 
         begin = clock();
-
-        sleep(5);
 
         int group_start_idx = (g == 0) ? (1) : (ftp_params.sync_group_vector_backward[g-1] + 1);
         int group_end_idx = ftp_params.sync_group_vector_backward[g];
@@ -347,15 +346,14 @@ int main_device(int argc, char* argv[]){
     begin = clock();
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
-        sleep(5);
-        receive_sum_broadcast_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+        receive_sum_transmit_device_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
     }
-    else{
-        sleep(5);
-        sync_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+    else if(is_device_representative_tile){
+        devices_send_partial_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
     }
 
     end = clock();
+    sleep(1);
 
     total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
     filter_partial_updates_time += (double)(end - begin) / CLOCKS_PER_SEC;

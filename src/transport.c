@@ -2,9 +2,9 @@
 #include "fused_device.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -14,6 +14,12 @@
 #include <errno.h>
 #include <arpa/inet.h> //close
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <semaphore.h>
+#include <sys/mman.h>
 
 #define MAX 40000
 #define PORT 7500 //SERVER PORT
@@ -28,6 +34,12 @@ client_structure** network_links;
 uint8_t receive_buffer[200000];
 
 char** DEVICE_IPs;
+int num_tiles_in_device;
+int current_device_tile_ids[32];
+int device_representative_tile_ids[32];
+int device_ids[32];
+int total_devices;
+int is_device_representative_tile;
 
 void get_device_ip(int device_id_x, int device_id_y, char* ip){
         strcpy(ip, DEVICE_IPs[device_id_y*ftp_params.NUM_TILES_X + device_id_x]);
@@ -46,11 +58,69 @@ void init_transport(char* argv[]){
 
     network_links = (client_structure**)calloc(ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y, sizeof(client_structure*));
 
+    num_tiles_in_device = 0;
+    total_devices = 0;
+    is_device_representative_tile = 0;
+
+    char current_device_ip[32];
 
     for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
     {
         strcpy(DEVICE_IPs[i], argv[i+3]);
     }
+
+    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    {
+        int flag = 0;
+        int tile_assigned_device_id = 0;
+        for (int j = 0; j < i; ++j){
+            if(strcmp(DEVICE_IPs[i], DEVICE_IPs[j]) == 0){
+                flag = 1;
+                device_ids[i] = device_ids[j];
+                break;
+            }
+        }
+        if(flag == 0){
+            device_representative_tile_ids[total_devices] = i;
+            if(((ftp_params.DEVICE_ID_Y*ftp_params.NUM_TILES_X) + (ftp_params.DEVICE_ID_X)) == i){
+                is_device_representative_tile = 1;
+            }
+            device_ids[i] = total_devices;
+            total_devices++;
+        }
+    }
+
+    // for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    // {
+    //     printf("%d\n", device_ids[i]);
+    // }
+
+    for (int i = 0; i < (total_devices); ++i)
+    {
+        printf("%d\n", device_representative_tile_ids[i]);
+    }
+
+    while(1);
+
+    strcpy(current_device_ip, DEVICE_IPs[(ftp_params.NUM_TILES_X * ftp_params.DEVICE_ID_Y) + ftp_params.DEVICE_ID_X]);
+    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    {
+        if(strcmp(DEVICE_IPs[i], current_device_ip) == 0){
+            current_device_tile_ids[num_tiles_in_device] = i;
+            num_tiles_in_device++;
+        }
+    }    
+
+    //current_device_tile_ids = calloc(num_tiles_in_device, sizeof(int));
+
+    // int ctr = 0;
+    // for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    // {
+    //     if(strcmp(DEVICE_IPs[i], current_device_ip) == 0){
+    //         current_device_tile_ids[ctr] = i;
+    //         ctr++; 
+    //     }
+    // }        
 
     //SERVER ENDPOINTS
     printf("IDx: %d IDY: %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y);

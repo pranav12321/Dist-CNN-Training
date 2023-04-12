@@ -44,4 +44,9 @@ void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM
 void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
 #endif
 
+
+void receive_sum_transmit_device_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
+void devices_send_partial_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
+
+
 #endif
