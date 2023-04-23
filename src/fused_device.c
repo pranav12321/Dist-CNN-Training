@@ -1,30 +1,9 @@
 #include "darknet.h"
 #include "fused_device.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <semaphore.h>
-#include <sys/mman.h>
-
 network_config network_params_original;
 network_config network_params_tile;
 ftp_config ftp_params;
-int fd_shm;
-
-extern int is_device_representative_tile;
-extern int num_tiles_in_device;
-extern int device_ids[32];
-
-#define SEM_MUTEX_NAME "/sem-mutex"
-#define SEM_BUFFER_COUNT_NAME "/sem-buffer-count"
-#define SEM_SPOOL_SIGNAL_NAME "/sem-spool-signal"
-#define SHARED_MEM_NAME "/posix-shared-mem"
 
 void config_init(int argc, char* argv[]){
 
@@ -166,57 +145,10 @@ void init_network(network** net_inp){
                                                      network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_stack_vector[i], 1,
                                                      network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0, RELU, 0, 0, 0, 0);
 
-            int total_filter_elements = net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n;
-            for (int i_f = 0; i_f < total_filter_elements; ++i_f)
+            for (int i_f = 0; i_f < (net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n); ++i_f)
             {
                     net->layers[i].weights[i_f] = 0.01;
             }
-
-            // Get shared memory 
-
-            float* device_weight_update_buffers;
-            char shm_file[3];
-            shm_file[0] = '/';
-            shm_file[1] = '0' + i;
-            shm_file[2] = '\0';
-            if(is_device_representative_tile){
-                printf("%s\n", "OPENING");
-                if ((fd_shm = shm_open (shm_file, O_RDWR | O_CREAT | O_EXCL, 0660)) == -1)
-                    error ("shm_open");
-
-                if (ftruncate (fd_shm, num_tiles_in_device*total_filter_elements*sizeof(float)) == -1)
-                   error ("ftruncate");
-                
-                if ((device_weight_update_buffers = mmap (NULL, num_tiles_in_device*total_filter_elements*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED,
-                        fd_shm, 0)) == MAP_FAILED)
-                    error ("mmap");
-                net->layers[i].weight_updates = device_weight_update_buffers;
-            }
-            else{
-                sleep(1);
-                printf("%s\n", "OPEN");
-                // Get shared memory 
-                if ((fd_shm = shm_open (shm_file, O_RDWR, 0)) == -1)
-                    error ("shm_open");
-
-                if ((device_weight_update_buffers = mmap (NULL, num_tiles_in_device*total_filter_elements*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED,
-                        fd_shm, 0)) == MAP_FAILED)
-                   error ("mmap");
-            }
-
-            int tile_pos_within_device = 0;
-            int current_device_id = device_ids[(ftp_params.NUM_TILES_X * ftp_params.DEVICE_ID_Y) + ftp_params.DEVICE_ID_X];
-            
-
-            for (int j = 0; j < (ftp_params.NUM_TILES_X * ftp_params.NUM_TILES_Y); ++j)
-            {
-                if(j == ((ftp_params.NUM_TILES_X * ftp_params.DEVICE_ID_Y) + ftp_params.DEVICE_ID_X))
-                    break;
-                if(device_ids[j] == current_device_id)
-                    tile_pos_within_device++;
-            }
-            net->layers[i].weight_updates = (device_weight_update_buffers + (tile_pos_within_device*total_filter_elements));
-
         }
 
         else if(network_params_tile.layer_type_vector[i] == MAXPOOL){

@@ -2,9 +2,9 @@
 #include "fused_device.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -14,12 +14,10 @@
 #include <errno.h>
 #include <arpa/inet.h> //close
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros
+#include <sys/un.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <semaphore.h>
-#include <sys/mman.h>
+#define CLIENT_SOCK_FILE "client.sock"
+#define SERVER_SOCK_FILE "server.sock"
 
 #define MAX 40000
 #define PORT 7500 //SERVER PORT
@@ -34,109 +32,24 @@ client_structure** network_links;
 uint8_t receive_buffer[200000];
 
 char** DEVICE_IPs;
-int num_tiles_in_device;
-int current_device_tile_ids[32];
-int device_representative_tile_ids[32];
-int device_ids[32];
-int total_devices;
-int is_device_representative_tile;
 
 void get_device_ip(int device_id_x, int device_id_y, char* ip){
         strcpy(ip, DEVICE_IPs[device_id_y*ftp_params.NUM_TILES_X + device_id_x]);
 }
 
-void init_transport(char* argv[]){
-
-    struct sockaddr_in servaddr, cli;
-    int sockfd, connfd, len;
-
-    DEVICE_IPs = calloc(32, sizeof(char*));
-    for (int i = 0; i < 32; ++i)
-    {
-        DEVICE_IPs[i] = calloc(32, sizeof(char));
-    }
-
-    network_links = (client_structure**)calloc(ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y, sizeof(client_structure*));
-
-    num_tiles_in_device = 0;
-    total_devices = 0;
-    is_device_representative_tile = 0;
-
-    char current_device_ip[32];
-
-    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    {
-        strcpy(DEVICE_IPs[i], argv[i+3]);
-    }
-
-    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    {
-        int flag = 0;
-        int tile_assigned_device_id = 0;
-        for (int j = 0; j < i; ++j){
-            if(strcmp(DEVICE_IPs[i], DEVICE_IPs[j]) == 0){
-                flag = 1;
-                device_ids[i] = device_ids[j];
-                break;
-            }
-        }
-        if(flag == 0){
-            device_representative_tile_ids[total_devices] = i;
-            if(((ftp_params.DEVICE_ID_Y*ftp_params.NUM_TILES_X) + (ftp_params.DEVICE_ID_X)) == i){
-                is_device_representative_tile = 1;
-            }
-            device_ids[i] = total_devices;
-            total_devices++;
-        }
-    }
-
-    // for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    // {
-    //     printf("%d\n", device_ids[i]);
-    // }
-
-    for (int i = 0; i < (total_devices); ++i)
-    {
-        printf("%d\n", device_representative_tile_ids[i]);
-    }
-
-    while(1);
-
-    strcpy(current_device_ip, DEVICE_IPs[(ftp_params.NUM_TILES_X * ftp_params.DEVICE_ID_Y) + ftp_params.DEVICE_ID_X]);
-    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    {
-        if(strcmp(DEVICE_IPs[i], current_device_ip) == 0){
-            current_device_tile_ids[num_tiles_in_device] = i;
-            num_tiles_in_device++;
-        }
-    }    
-
-    //current_device_tile_ids = calloc(num_tiles_in_device, sizeof(int));
-
-    // int ctr = 0;
-    // for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    // {
-    //     if(strcmp(DEVICE_IPs[i], current_device_ip) == 0){
-    //         current_device_tile_ids[ctr] = i;
-    //         ctr++; 
-    //     }
-    // }        
-
-    //SERVER ENDPOINTS
-    printf("IDx: %d IDY: %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y);
-
-     for (int i = (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y + 1) ; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
-    {
-
-        client_structure* cs = calloc(1, sizeof(client_structure));
-        cs->receive_buffer = calloc(MAX_BOUNDARY_SIZE_PER_DEVICE*3, sizeof(float));
-
-        network_links[i] = cs;
-        cs->endpoint_type = 1;
-
-        for(int j = 0; j < 2; j++){
+void server_accept_local_tile(int i, int j, client_structure* cs){
+            struct sockaddr_un servaddr, cli;
+            int sockfd, connfd, len;
+            char connection_str[6];
+            connection_str[0] = '0' + ftp_params.DEVICE_ID_X;
+            connection_str[1] = '0' + ftp_params.DEVICE_ID_Y;
+            connection_str[2] = '0' + i%ftp_params.NUM_TILES_X;
+            connection_str[3] = '0' + i/ftp_params.NUM_TILES_X;
+            connection_str[4] = '0' + j;
+            connection_str[5] = '\0';
             // socket create and verification
-            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+            sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
             if (sockfd == -1) {
                 printf("socket creation failed...\n");
                 exit(0);
@@ -148,9 +61,12 @@ void init_transport(char* argv[]){
             bzero(&servaddr, sizeof(servaddr));
 
             // assign IP, PORT
-            servaddr.sin_family = AF_INET;
-            servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-            servaddr.sin_port = htons(port);
+            servaddr.sun_family = AF_UNIX;
+            // servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            // servaddr.sin_port = htons(port);
+            //addr.sun_family = AF_UNIX;
+            strcpy(servaddr.sun_path, connection_str);
+            unlink(connection_str);
 
             // Binding newly created socket to given IP and verification
             if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
@@ -161,7 +77,7 @@ void init_transport(char* argv[]){
                 printf("Socket successfully binded..\n");
 
             // Now server is ready to listen and verification
-            if ((listen(sockfd, 5)) != 0) {
+            if ((listen(sockfd, 20)) != 0) {
                 printf("Listen failed...\n");
                 exit(0);
             }
@@ -180,19 +96,202 @@ void init_transport(char* argv[]){
 
             cs->socket_fd[j] = connfd;
             cs->endpoint_type = 1;
+}
+
+void server_accept_network_tile(int i, int j, client_structure* cs){
+    struct sockaddr_in servaddr, cli;
+    int sockfd, connfd, len;
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully created..\n");
+
+    int port = PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*((ftp_params.DEVICE_ID_X) + (ftp_params.NUM_TILES_X)*(ftp_params.DEVICE_ID_Y)) + i + 600*j;
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(port);
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
+        printf("socket bind failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully binded..\n");
+
+    // Now server is ready to listen and verification
+    if ((listen(sockfd, 5)) != 0) {
+        printf("Listen failed...\n");
+        exit(0);
+    }
+    else
+        printf("Server listening for client %d %d on port %d\n", i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, port);
+    len = sizeof(cli);
+
+    // Accept the data packet from client and verification
+    connfd = accept(sockfd, (SA*)&cli, &len);
+    if (connfd < 0) {
+        printf("server accept failed...\n");
+        exit(0);
+    }
+    else
+        printf("server %d %d successfully accepted the client %d %d on port %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, port);
+
+    cs->socket_fd[j] = connfd;
+    cs->endpoint_type = 1;
+}
+
+
+
+void client_connect_local_tile(int i, int j, client_structure* cs){
+    struct sockaddr_un servaddr, cli;
+    int sockfd, connfd, len;
+
+    char ip[15];
+    get_device_ip(i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, ip);
+
+    char connection_str[6];
+    connection_str[0] = '0' + i%ftp_params.NUM_TILES_X;
+    connection_str[1] = '0' + i/ftp_params.NUM_TILES_X;
+    connection_str[2] = '0' + ftp_params.DEVICE_ID_X;
+    connection_str[3] = '0' + ftp_params.DEVICE_ID_Y;
+    connection_str[4] = '0' + j;
+    connection_str[5] = '\0';
+
+    sockfd = -1;
+    while(sockfd == -1){
+        sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        if (sockfd == -1) {
+            // printf("socket creation failed...\n");
+            // exit(0);
+        }
+        else
+            printf("Socket successfully created\n");
+    }
+    bzero(&servaddr, sizeof(servaddr));
+ 
+    // assign IP, PORT
+    servaddr.sun_family = AF_UNIX;
+    strncpy(servaddr.sun_path, connection_str, sizeof(servaddr.sun_path) - 1);
+   // servaddr.sin_addr.s_addr = inet_addr(ip);
+    //servaddr.sin_port = htons(PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600);
+
+    printf("Attempting to connect to server %d %d on port %d at ip %s\n", i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600, ip);
+ 
+    // connect the client socket to server socket
+    while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
+        != 0) {
+        //printf("connection with the server failed...\n");
+        //exit(0);
+    }
+    //else
+    printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y)  + j*600);
+
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    cs->socket_fd[j] = sockfd;
+    cs->endpoint_type = 0;
+}
+
+void client_connect_network_tile(int i, int j, client_structure* cs){
+    struct sockaddr_in servaddr, cli;
+    int sockfd, connfd, len;
+
+    char ip[15];
+    get_device_ip(i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, ip);
+
+    while(sockfd == -1){
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == -1) {
+            // printf("socket creation failed...\n");
+            // exit(0);
+        }
+        else
+            printf("Socket successfully created\n");
+    }
+    bzero(&servaddr, sizeof(servaddr));
+ 
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(ip);
+    servaddr.sin_port = htons(PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600);
+
+    printf("Attempting to connect to server %d %d on port %d at ip %s\n", i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600, ip);
+ 
+    // connect the client socket to server socket
+    while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
+        != 0) {
+        //printf("connection with the server failed...\n");
+        //exit(0);
+    }
+    //else
+    printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y)  + j*600);
+
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    cs->socket_fd[j] = sockfd;
+    cs->endpoint_type = 0;
+}
+
+void init_transport(char* argv[]){
+
+    
+    int sockfd, connfd, len;
+
+    DEVICE_IPs = calloc(32, sizeof(char*));
+    for (int i = 0; i < 32; ++i)
+    {
+        DEVICE_IPs[i] = calloc(32, sizeof(char));
+    }
+
+    network_links = (client_structure**)calloc(ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y, sizeof(client_structure*));
+
+
+    for (int i = 0; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    {
+        strcpy(DEVICE_IPs[i], argv[i+3]);
+    }
+
+    //SERVER ENDPOINTS
+    printf("IDx: %d IDY: %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y);
+
+     for (int i = (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y + 1) ; i < (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y); ++i)
+    {
+
+        client_structure* cs = calloc(1, sizeof(client_structure));
+        cs->receive_buffer = calloc(MAX_BOUNDARY_SIZE_PER_DEVICE*3, sizeof(float));
+
+        network_links[i] = cs;
+        cs->endpoint_type = 1;
+
+        int connection = AF_INET;
+
+
+        for(int j = 0; j < 2; j++){
+
+            if(strcmp(DEVICE_IPs[i], DEVICE_IPs[ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y]) == 0){
+                server_accept_local_tile(i, j, cs);
+            }
+            else{
+                server_accept_network_tile(i, j, cs);
+            }
         }
 
         for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
         {
             cs->receive_device_data_ptrs[j].valid = 0;
         }
-
-
     }   
-
-
-    //CLIENT ENDPOINTS
-    char ip[15];
     
     for (int i = (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y - 1); i >= 0 ; --i)
     {
@@ -201,45 +300,16 @@ void init_transport(char* argv[]){
         network_links[i] = cs;
         cs->endpoint_type = 0;
 
-        get_device_ip(i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, ip);
         // socket create and verification
 
         for (int j = 0; j < 2; ++j)
         {
-            int sockfd = -1;
-            while(sockfd == -1){
-                sockfd = socket(AF_INET, SOCK_STREAM, 0);
-                if (sockfd == -1) {
-                    // printf("socket creation failed...\n");
-                    // exit(0);
-                }
-                else
-                    printf("Socket successfully created\n");
+            if(strcmp(DEVICE_IPs[i], DEVICE_IPs[ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y]) == 0){
+                client_connect_local_tile(i, j, cs);
             }
-            bzero(&servaddr, sizeof(servaddr));
-         
-            // assign IP, PORT
-            servaddr.sin_family = AF_INET;
-            servaddr.sin_addr.s_addr = inet_addr(ip);
-            servaddr.sin_port = htons(PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600);
-
-            printf("Attempting to connect to server %d %d on port %d at ip %s\n", i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y) + j*600, ip);
-         
-            // connect the client socket to server socket
-            while (connect(sockfd, (SA*)&servaddr, sizeof(servaddr))
-                != 0) {
-                //printf("connection with the server failed...\n");
-                //exit(0);
+            else{
+                client_connect_network_tile(i, j, cs);
             }
-            //else
-            printf("client %d %d endpoint successfully connected with server device %d %d on port %d\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, i%ftp_params.NUM_TILES_X, i/ftp_params.NUM_TILES_X, PORT + (ftp_params.NUM_TILES_X*ftp_params.NUM_TILES_Y)*i + (ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y)  + j*600);
-
-
-            int flags = fcntl(sockfd, F_GETFL, 0);
-            fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
-
-            cs->socket_fd[j] = sockfd;
-            cs->endpoint_type = 0;
         }
 
         for (int j = 0; j < MAX_PACKETS_PER_DEVICE; ++j)
