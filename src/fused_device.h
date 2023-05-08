@@ -96,5 +96,24 @@ typedef struct ftp_config{
     int sync_group_vector_backward[MAX_LAYERS];
 } ftp_config;
 
+typedef struct device_tile{
+    int network_tile_id;
+    int device_tile_id;
+    int is_device_representative_tile; //1 if device_tile_id == 0
+} device_tile;
+
+typedef struct ftp_device_params{
+    int num_tiles;
+    char device_ip[20];
+    device_tile* device_tiles;
+    int representative_tile_network_id;
+    //int representative_tile_device_id;  always 0
+} network_device;
+
+typedef struct ftp_network{
+    int total_tiles;
+    int total_devices;
+    network_device* devices;
+} ftp_network;
 
 #endif

@@ -15,6 +15,10 @@ extern network_config network_params_original;
 extern network_config network_params_tile;
 extern ftp_config ftp_params;
 
+extern device_tile current_tile;
+extern network_device current_device;
+extern ftp_network ftp_cluster;
+
 void backprop_layer0(network* net, float* INPUT_BOUNDRY);
 
 int main_device(int argc, char* argv[]){
@@ -61,7 +65,7 @@ int main_device(int argc, char* argv[]){
 
     end = clock();
 
-    total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    // total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
 
     for (int g = 0; g < ftp_params.NUM_GROUPS_FORWARD; ++g)
     {
@@ -74,7 +78,6 @@ int main_device(int argc, char* argv[]){
                         net->layers[group_start_idx].c;
 
         net->input = calloc(net->inputs, sizeof(float));
-        sleep(5);
 
         //get boundry data here
         assemble_forward_group_data_device(net, 
@@ -171,12 +174,16 @@ int main_device(int argc, char* argv[]){
 
     printf("Inference complete\n");
 
+    update_args a;
+    a.batch = 1;
+    a.learning_rate = 0.001;
+    a.momentum = 0.9;
+    a.decay = 0.0005;
+
     for (int g = (ftp_params.NUM_GROUPS_BACKWARD-1); g >= 0; --g)
     {
 
         begin = clock();
-
-        sleep(5);
 
         int group_start_idx = (g == 0) ? (1) : (ftp_params.sync_group_vector_backward[g-1] + 1);
         int group_end_idx = ftp_params.sync_group_vector_backward[g];
@@ -346,19 +353,40 @@ int main_device(int argc, char* argv[]){
 
     begin = clock();
 
+
+
+
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
-        sleep(5);
-        receive_sum_broadcast_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+        train_cycle_complete_sema_wait(current_device.num_tiles - 1);
+        receive_sum_transmit_device_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+    }
+    else if(current_tile.is_device_representative_tile){
+        train_cycle_complete_sema_wait(current_device.num_tiles - 1);
+        devices_send_partial_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
     }
     else{
-        sleep(5);
-        sync_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+        train_cycle_complete_sema_post(1);
+        filter_sync_complete_sema_wait(1);
     }
 
     end = clock();
 
     total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
     filter_partial_updates_time += (double)(end - begin) / CLOCKS_PER_SEC;
+
+
+    begin = clock();
+    for (int l = 0; l < net->n; l++)
+    {
+        if(net->layers[l].type == CONVOLUTIONAL){
+            net->layers[l].learning_rate_scale = 1.0;
+            update_convolutional_layer(net->layers[l], a);
+        }
+    }
+    end = clock();
+    total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    backprop_time += (double)(end - begin) / CLOCKS_PER_SEC;
+
 
     total_end = clock();
     total_time += (double)(total_end - total_begin) / CLOCKS_PER_SEC;
@@ -600,7 +628,7 @@ int main_device(int argc, char* argv[]){
 
            FILE *fptr;
 
-           char* file_prefix = "weights_device_";
+           char* file_prefix = "weight_updates_device_";
            char file_name[20];
            strcpy(file_name, file_prefix);
 
@@ -631,7 +659,7 @@ int main_device(int argc, char* argv[]){
                         {
                             for (int n = 0; n < filter_size; ++n)
                             {
-                             fprintf(fptr,"%.4f ", net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
+                             fprintf(fptr,"%.4f ", net->layers[l].weights[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
                             }
                             fprintf(fptr, "\n");
                         }
@@ -711,6 +739,10 @@ void backprop_layer0(network* net, float* INPUT_BOUNDRY){
     backward_convolutional_layer_dist_filters(net->layers[0], *net);   
 }
 
+
+
+
 int main(int argc, char* argv[]){
     main_device(argc, argv);
+    printf("complete\n");
 }

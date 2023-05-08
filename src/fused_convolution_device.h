@@ -36,12 +36,10 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 void zero_out_spurious_edges_featuremap(network* net, int layer_idx);
 void zero_out_spurious_edges_delta(network* net, int layer_idx);
 
-#ifdef SERVER
 void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
-#endif
-
-#ifdef CLIENT
 void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
-#endif
+void receive_sum_transmit_device_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
+void devices_send_partial_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
+
 
 #endif

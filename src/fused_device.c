@@ -1,9 +1,14 @@
 #include "darknet.h"
 #include "fused_device.h"
+#include "sm.h"
 
 network_config network_params_original;
 network_config network_params_tile;
 ftp_config ftp_params;
+
+device_tile current_tile;
+network_device current_device;
+ftp_network ftp_cluster;
 
 void config_init(int argc, char* argv[]){
 
@@ -141,13 +146,32 @@ void init_network(network** net_inp){
     {
 
         if(network_params_tile.layer_type_vector[i] == CONVOLUTIONAL){
+
             net->layers[i] = make_convolutional_layer(1, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
                                                      network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_stack_vector[i], 1,
                                                      network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0, RELU, 0, 0, 0, 0);
+            int total_filter_elements = net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n;
 
-            for (int i_f = 0; i_f < (net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n); ++i_f)
+            for (int i_f = 0; i_f < (total_filter_elements); ++i_f)
             {
                     net->layers[i].weights[i_f] = 0.01;
+            }
+
+            // Get shared memory 
+
+            float* device_weight_update_buffers;
+            char shm_file[3];
+            shm_file[0] = '/';
+            shm_file[1] = '0' + i;
+            shm_file[2] = '\0';
+            if(current_tile.is_device_representative_tile){
+                create_sm(shm_file, &device_weight_update_buffers, current_device.num_tiles, total_filter_elements);
+                net->layers[i].weight_updates = device_weight_update_buffers;
+            }
+            else{
+                sleep(1);
+                get_sm_buffer(shm_file, &device_weight_update_buffers, current_device.num_tiles, total_filter_elements);
+                net->layers[i].weight_updates = (device_weight_update_buffers + ((current_tile.device_tile_id)*total_filter_elements));
             }
         }
 

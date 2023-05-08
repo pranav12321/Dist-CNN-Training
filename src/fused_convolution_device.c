@@ -11,6 +11,10 @@ extern network_config network_params_original;
 extern network_config network_params_tile;
 extern ftp_config ftp_params;
 
+extern device_tile current_tile;
+extern network_device current_device;
+extern ftp_network ftp_cluster;
+
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     int current_layer_idx, 
@@ -1624,4 +1628,205 @@ void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
     free(data);
 
 
+}
+
+
+
+void receive_sum_transmit_device_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
+
+    for (int i = 0; i < net->n; ++i)
+    {
+        int total_filter_elements = net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n;
+
+    }
+
+    int total_weights = 0;
+    for (int l = 0; l < net->n; ++l){
+        int num_filters = net->layers[l].n;
+        int filter_size = net->layers[l].size;
+        int channels = net->layers[l].c;
+        total_weights += num_filters*channels*filter_size*filter_size;
+    }    
+
+    int num_tiles_in_device = current_device.num_tiles;
+    int total_devices = ftp_cluster.total_devices;
+
+    printf("Tiles: Total Devices: %d %d\n", num_tiles_in_device, total_devices);
+
+    for (int i = 1; i < num_tiles_in_device; ++i)
+    {
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+
+            float* tile_weight_updates_offset = (net->layers[l].weight_updates) + (i*num_filters*channels*filter_size*filter_size);
+
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                net->layers[l].weight_updates[n] +=
+                tile_weight_updates_offset[n];
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+        }
+    }
+
+    float* data = calloc(total_weights, sizeof(float));
+    for (int i = 1; i < total_devices; ++i)
+    {
+        receive_boundry(data, total_weights, (ftp_cluster.devices[i].representative_tile_network_id)%NUM_TILES_X, (ftp_cluster.devices[i].representative_tile_network_id)/NUM_TILES_X);
+
+        int layer_cumulative_weights = 0;
+
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                net->layers[l].weight_updates[n] += 
+                data[layer_cumulative_weights + n];
+
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+            layer_cumulative_weights += (num_filters*channels*filter_size*filter_size);
+
+        }
+
+    }
+
+    for (int i = 1; i < total_devices; ++i)
+    {
+        int layer_cumulative_weights = 0;
+
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                data[layer_cumulative_weights + n] = 
+                net->layers[l].weight_updates[n];
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+            layer_cumulative_weights += (num_filters*channels*filter_size*filter_size);
+
+        }
+
+        send_boundry(data, total_weights, (ftp_cluster.devices[i].representative_tile_network_id)%NUM_TILES_X, (ftp_cluster.devices[i].representative_tile_network_id)/NUM_TILES_X);
+
+    }
+
+    for (int i = 1; i < num_tiles_in_device; ++i)
+    {
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+
+            float* tile_weight_updates_offset = (net->layers[l].weight_updates) + (i*num_filters*channels*filter_size*filter_size);
+
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                tile_weight_updates_offset[n] =
+                net->layers[l].weight_updates[n];
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+        }
+    }
+
+   filter_sync_complete_sema_post(num_tiles_in_device - 1);
+}
+
+void devices_send_partial_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
+
+    int total_weights = 0;
+    int num_tiles_in_device = current_device.num_tiles;
+    int total_devices = ftp_cluster.total_devices;
+
+    for (int l = 0; l < net->n; ++l){
+        int num_filters = net->layers[l].n;
+        int filter_size = net->layers[l].size;
+        int channels = net->layers[l].c;
+        total_weights += num_filters*channels*filter_size*filter_size;
+    }    
+
+
+    for (int i = 1; i < num_tiles_in_device; ++i)
+    {
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+
+            float* tile_weight_updates_offset = (net->layers[l].weight_updates) + (i*num_filters*channels*filter_size*filter_size);
+
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                net->layers[l].weight_updates[n] +=
+                tile_weight_updates_offset[n];
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+        }
+    }
+
+    float* data = malloc(total_weights * sizeof(float));
+
+    int layer_cumulative_weights = 0;
+    for (int l = 0; l < net->n; ++l){
+
+        int num_filters = net->layers[l].n;
+        int filter_size = net->layers[l].size;
+        int channels = net->layers[l].c;
+
+        for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+        {
+            data[layer_cumulative_weights + n] = 
+            net->layers[l].weight_updates[n];
+        }
+        layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
+    }
+
+    send_boundry(data, total_weights, 0, 0);
+
+    receive_boundry(data, total_weights, 0, 0);
+
+    layer_cumulative_weights = 0;
+
+    for (int l = 0; l < net->n; ++l){
+
+        int num_filters = net->layers[l].n;
+        int filter_size = net->layers[l].size;
+        int channels = net->layers[l].c;
+
+        for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+        {
+            net->layers[l].weight_updates[n] = 
+            data[layer_cumulative_weights + n];
+        }
+        layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
+    }
+
+    free(data);
+
+
+    for (int i = 1; i < num_tiles_in_device; ++i)
+    {
+        for (int l = 0; l < net->n; ++l){
+            int num_filters = net->layers[l].n;
+            int filter_size = net->layers[l].size;
+            int channels = net->layers[l].c;
+
+            float* tile_weight_updates_offset = (net->layers[l].weight_updates) + (i*num_filters*channels*filter_size*filter_size);
+
+            for (int n = 0; n < (num_filters*channels*filter_size*filter_size); ++n)
+            {
+                tile_weight_updates_offset[n] =
+                net->layers[l].weight_updates[n];
+                //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
+            }
+        }
+    }
+
+    filter_sync_complete_sema_post(num_tiles_in_device - 1);
 }
