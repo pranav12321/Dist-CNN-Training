@@ -19,14 +19,14 @@ int main_yolo(){
 
     network* net = calloc(1, sizeof(network));//SHARED_NETWORKS[i][j];
 
-    net->n = 11;
+    net->n = 9;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
 
     int filter_size = 3;
-    int num_layers = 11;
+    int num_layers = 16;
     int unit_boundry = 1;
 
     //yolo v2
@@ -58,16 +58,16 @@ int main_yolo(){
 
     net->layers[10] = make_convolutional_layer(1, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[11] = make_maxpool_layer(1, 76/2, 76/2, 256, 2, 2, 0);
+    net->layers[11] = make_maxpool_layer(1, LAYER_SIZE/8, LAYER_SIZE/8, 256, 2, 2, 0);
 
 
-    // net->layers[12] = make_convolutional_layer(1, 38/2, 38/2, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[12] = make_convolutional_layer(1, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[13] = make_convolutional_layer(1, 38/2, 38/2, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[13] = make_convolutional_layer(1, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[14] = make_convolutional_layer(1, 38/2, 38/2, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[14] = make_convolutional_layer(1, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 
-    // net->layers[15] = make_convolutional_layer(1, 38/2, 38/2, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[15] = make_convolutional_layer(1, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
 
     // net->layers[16] = make_convolutional_layer(1, 38/2, 38/2, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
 

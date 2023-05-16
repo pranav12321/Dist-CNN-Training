@@ -17,15 +17,19 @@ void config_init(int argc, char* argv[]){
     LAYER_TYPE layer_type_vector[16] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
-    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 3, 3, 1, 3, 1};
+    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 2, 3, 1, 3, 1};
 
     int INPUT_WIDTH = 608;
     int INPUT_HEIGHT = 608;
     int INPUT_CHANNELS = 3;
-    int num_layers = 11;
 
     int NUM_TILES_X = 2;
     int NUM_TILES_Y = 1;
+
+    ftp_params.NUM_TILES_Y = atoi(argv[2]);
+    ftp_params.NUM_TILES_X = atoi(argv[1]);
+
+    int num_layers = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 5 ]);
 
     network_params_tile.num_layers = num_layers;
     network_params_original.num_layers = num_layers;
@@ -35,9 +39,6 @@ void config_init(int argc, char* argv[]){
 
     network_params_tile.INPUT_HEIGHT = INPUT_HEIGHT;
     network_params_original.INPUT_HEIGHT = INPUT_HEIGHT;
-
-    ftp_params.NUM_TILES_Y = atoi(argv[2]);
-    ftp_params.NUM_TILES_X = atoi(argv[1]);
 
     network_params_original.featuremap_dim_without_boundry_vector[0].x_dim = INPUT_WIDTH;
     network_params_original.featuremap_dim_without_boundry_vector[0].y_dim = INPUT_HEIGHT;
@@ -87,7 +88,7 @@ void config_init(int argc, char* argv[]){
         network_params_tile.delta_dim_with_boundry_vector[i].depth = network_params_tile.featuremap_dim_with_boundry_vector[i+1].depth;
     }
 
-    ftp_params.NUM_GROUPS_FORWARD = 11;
+    ftp_params.NUM_GROUPS_FORWARD = num_layers;
 
     ftp_params.sync_group_vector_forward[0] = 0;
     ftp_params.sync_group_vector_forward[1] = 1;
@@ -100,8 +101,13 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_forward[8] = 8;
     ftp_params.sync_group_vector_forward[9] = 9;
     ftp_params.sync_group_vector_forward[10] = 10;
+    ftp_params.sync_group_vector_forward[11] = 11;
+    ftp_params.sync_group_vector_forward[12] = 12;
+    ftp_params.sync_group_vector_forward[13] = 13;
+    ftp_params.sync_group_vector_forward[14] = 14;
+    ftp_params.sync_group_vector_forward[15] = 15;
 
-    ftp_params.NUM_GROUPS_BACKWARD = 10;
+    ftp_params.NUM_GROUPS_BACKWARD = num_layers - 1;
     //ftp_params.NUM_GROUPS_BACKWARD = 1;
 
     ftp_params.sync_group_vector_backward[0] = 1;// 3, 5, 7, 10};
@@ -114,6 +120,11 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_backward[7] = 8;
     ftp_params.sync_group_vector_backward[8] = 9;
     ftp_params.sync_group_vector_backward[9] = 10;
+    ftp_params.sync_group_vector_backward[10] = 11;
+    ftp_params.sync_group_vector_backward[11] = 12;
+    ftp_params.sync_group_vector_backward[12] = 13;
+    ftp_params.sync_group_vector_backward[13] = 14;
+    ftp_params.sync_group_vector_backward[14] = 15;
 
    // ftp_params.sync_group_vector_backward[0] = 10;
     // printf("%d\n", ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3);
@@ -435,14 +446,6 @@ void backward_pass(){
 
         printf("Group start = %d end = %d\n", group_start_idx, group_end_idx);
 
-        // printf("Layer %d \n\n", i);
-        // printf("DELTA H with boundry/without boundry = %d %d\n", network_params_tile.delta_dim_with_boundry_vector[0].y_dim, network_params_tile.delta_dim_without_boundry_vector[0].y_dim);
-        // printf("DELTA W with boundry/without boundry = %d %d\n", network_params_tile.delta_dim_with_boundry_vector[0].x_dim, network_params_tile.delta_dim_without_boundry_vector[0].x_dim);
-        // printf("Top boundry edges = %d\n", top_boundry_edges);
-        // printf("Left boundry edges = %d\n", left_boundry_edges);
-        // printf("Right boundry edges = %d\n", right_boundry_edges);
-        // printf("Bottom boundry edges = %d\n\n", bottom_boundry_edges);
-
         for (int j = group_start_idx; j <= group_end_idx; ++j)
         {
 
@@ -450,21 +453,11 @@ void backward_pass(){
             int unit_boundry = ((filter_size & 0x1) == 1) ? ((filter_size - 1)/2) : (filter_size/2);
             int stride = network_params_tile.stride_vector[j];
 
-            //Previous layer coordinate bounds and edges
-            int start_x_coordinate = (j == group_start_idx) ? group_start_bounds_tile.start_x_coordinate : network_params_tile.delta_bounds_vector[j-1].start_x_coordinate;
-            int start_y_coordinate = (j == group_start_idx) ? group_start_bounds_tile.start_y_coordinate : network_params_tile.delta_bounds_vector[j-1].start_y_coordinate;
-            int end_x_coordinate = (j == group_start_idx) ? group_start_bounds_tile.end_x_coordinate : network_params_tile.delta_bounds_vector[j-1].end_x_coordinate;
-            int end_y_coordinate = (j == group_start_idx) ? group_start_bounds_tile.end_y_coordinate : network_params_tile.delta_bounds_vector[j-1].end_y_coordinate;
-
+            //Previous layer edges
             int left_boundry_edges = (j == group_start_idx) ? group_start_edges_tile.left_boundry_edges : network_params_tile.delta_edges_vector[j-1].left_boundry_edges;
             int right_boundry_edges = (j == group_start_idx) ? group_start_edges_tile.right_boundry_edges : network_params_tile.delta_edges_vector[j-1].right_boundry_edges;
             int top_boundry_edges = (j == group_start_idx) ? group_start_edges_tile.top_boundry_edges : network_params_tile.delta_edges_vector[j-1].top_boundry_edges;
             int bottom_boundry_edges = (j == group_start_idx) ? group_start_edges_tile.bottom_boundry_edges : network_params_tile.delta_edges_vector[j-1].bottom_boundry_edges;
-
-            int left_boundry_edges_total = left_boundry_edges + unit_boundry;
-            int top_boundry_edges_total = top_boundry_edges + unit_boundry;
-            int bottom_boundry_edges_total = bottom_boundry_edges + unit_boundry;
-            int right_boundry_edges_total = right_boundry_edges + unit_boundry;
 
             if(network_params_tile.layer_type_vector[j] == CONVOLUTIONAL){
                 left_boundry_edges = (left_boundry_edges + unit_boundry)/stride;
@@ -480,7 +473,7 @@ void backward_pass(){
                 right_boundry_edges = (right_boundry_edges + (stride-1))/stride;
             }
 
-            network_params_tile.back_pad[j] = left_boundry_edges_total - left_boundry_edges;
+            // network_params_tile.back_pad[j] = left_boundry_edges_total - left_boundry_edges;
 
             network_params_tile.delta_dim_with_boundry_vector[j].x_dim = network_params_tile.delta_dim_without_boundry_vector[j].x_dim + left_boundry_edges + right_boundry_edges; 
             network_params_tile.delta_dim_with_boundry_vector[j].y_dim = network_params_tile.delta_dim_without_boundry_vector[j].y_dim + top_boundry_edges + bottom_boundry_edges; 

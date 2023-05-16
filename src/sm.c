@@ -63,6 +63,8 @@ void get_sm_buffer(char* shm_file, float** buffer, int num_processes, int size_p
 
     while( ((sm_create_mutex = sem_open (SEM_MUTEX_NAME, 0, 0, 0)) == SEM_FAILED) );
     while( ((sm_train_mutex = sem_open (SEM_TRAIN_CYCLE_COMPLETE, 0, 0, 0)) == SEM_FAILED) );
+    while( ((sm_filter_sync_mutex = sem_open (SEM_FILTER_SYNC_COMPLETE, 0, 0, 0)) == SEM_FAILED) );
+
         // error ("sem_open");
 
 	if (sem_wait (sm_create_mutex) == -1)
