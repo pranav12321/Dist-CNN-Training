@@ -64,6 +64,7 @@ typedef struct edges{
 
 typedef struct network_config{
     int num_layers;
+    int batch_size;
     int INPUT_WIDTH;
     int INPUT_HEIGHT;
     int stride_vector[MAX_LAYERS];

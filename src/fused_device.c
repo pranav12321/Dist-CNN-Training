@@ -34,6 +34,11 @@ void config_init(int argc, char* argv[]){
     network_params_tile.num_layers = num_layers;
     network_params_original.num_layers = num_layers;
 
+    int batch_size = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 6 ]);
+
+    network_params_tile.batch_size = batch_size;
+    network_params_original.batch_size = batch_size;
+
     network_params_tile.INPUT_WIDTH = INPUT_WIDTH;
     network_params_original.INPUT_WIDTH = INPUT_WIDTH;
 
@@ -151,6 +156,8 @@ void init_network(network** net_inp){
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
+    net->batch = network_params_tile.batch_size;
+
 
 
     for (int i = 0; i < net->n; ++i)
@@ -158,7 +165,7 @@ void init_network(network** net_inp){
 
         if(network_params_tile.layer_type_vector[i] == CONVOLUTIONAL){
 
-            net->layers[i] = make_convolutional_layer(1, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
+            net->layers[i] = make_convolutional_layer(net->batch, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
                                                      network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_stack_vector[i], 1,
                                                      network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0, RELU, 0, 0, 0, 0);
             int total_filter_elements = net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n;
@@ -188,7 +195,7 @@ void init_network(network** net_inp){
 
         else if(network_params_tile.layer_type_vector[i] == MAXPOOL){
             //(int batch, int h, int w, int c, int size, int stride, int padding)
-            net->layers[i] = make_maxpool_layer(1, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
+            net->layers[i] = make_maxpool_layer(net->batch, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
                              network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0); 
         }
 

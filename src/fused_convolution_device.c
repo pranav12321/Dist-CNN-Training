@@ -157,11 +157,15 @@ void assemble_forward_group_data_device(network* net,
         int x_dim = net->layers[current_layer_idx].original_featuremap_in_w;
         int y_dim = net->layers[current_layer_idx].original_featuremap_in_h;
         int z_dim = net->layers[current_layer_idx].c;
+        int original_sample_size = (x_dim*y_dim*z_dim);
+
+        int batches = net->batch;
 
         float* transmit_data;
         int transmit_size;
 
         float* src_structure = (current_layer_idx == 0) ? INPUT_IMAGE : (net->layers[current_layer_idx - 1].output);
+        int total_tile_sample_size = tile_total_input_height*tile_total_input_width*depth;
 
         int core_img_read_start_offset_x = (left_boundry_edges >= 0) ? 0 : (-1*left_boundry_edges);
         int core_img_read_start_offset_y = (top_boundry_edges >= 0) ? 0 : (-1*top_boundry_edges);
@@ -208,13 +212,17 @@ void assemble_forward_group_data_device(network* net,
 
         //Core tile image
 
-        for (int c = 0; c < depth; ++c)
+        for(int sample_id = 0; sample_id < batches; sample_id++)
         {
-            for (int i = 0; i < num_core_img_elements_y; ++i)
+            for (int c = 0; c < depth; ++c)
             {
-                for (int j = 0; j < num_core_img_elements_x; ++j)
+                for (int i = 0; i < num_core_img_elements_y; ++i)
                 {
-                    net->input[(c*tile_total_input_width*tile_total_input_height) + (i+core_img_write_start_offset_y)*tile_total_input_width + (j+core_img_write_start_offset_x)] = group_initial_featuremap[(c*tile_input_width_original*tile_input_height_original) + ((i+core_img_read_start_offset_y)*tile_input_width_original) + (j+core_img_read_start_offset_x)];
+                    for (int j = 0; j < num_core_img_elements_x; ++j)
+                    {
+                        net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+core_img_write_start_offset_y)*tile_total_input_width + (j+core_img_write_start_offset_x)] = 
+                        group_initial_featuremap[(sample_id*total_tile_sample_size) + (c*tile_input_width_original*tile_input_height_original) + ((i+core_img_read_start_offset_y)*tile_input_width_original) + (j+core_img_read_start_offset_x)];
+                    }
                 }
             }
         }
@@ -223,25 +231,30 @@ void assemble_forward_group_data_device(network* net,
         if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
 
             float* boundry_top_left;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_top_left, 
-                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
-                device_id_x-1, device_id_y-1,
-                device_id_x, device_id_y);
 
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_top_left, 
+                    top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
+                    device_id_x-1, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + j] = boundry_top_left[(c*top_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + j] = 
+                            boundry_top_left[(c*top_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_top_left);
             }
-           free(boundry_top_left);
 
             //SEND TOP LEFT
             if((device_id_y > 0) && (device_id_x > 0)){
@@ -249,18 +262,22 @@ void assemble_forward_group_data_device(network* net,
                 int cols = left_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                    }       
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        }       
+                    }
+            
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
                 }
-         
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
                 free(transmit_data);
 
             }
@@ -273,27 +290,32 @@ void assemble_forward_group_data_device(network* net,
 
             //receive top edges
             float* boundry_top;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_top, 
-                top_boundry_edges, tile_input_width_original, depth, BOTTOM, 
-                device_id_x, device_id_y-1,
-                device_id_x, device_id_y);
 
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_top, 
+                    top_boundry_edges, tile_input_width_original, depth, BOTTOM, 
+                    device_id_x, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < tile_input_width_original; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = boundry_top[(c*top_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
+                        for (int j = 0; j < tile_input_width_original; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = 
+                            boundry_top[(c*top_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
+                        }
                     }
                 }
+                free(boundry_top);
             }
-           free(boundry_top);
 
             //SEND TOP
             if(device_id_y > 0){
@@ -301,18 +323,22 @@ void assemble_forward_group_data_device(network* net,
                 int cols = featuremap_width;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                    } 
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        } 
+                    }
+                
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
                 }
-               
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
                 free(transmit_data);
             }
         } 
@@ -320,27 +346,32 @@ void assemble_forward_group_data_device(network* net,
         // //Top right
         if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
             float* boundry_top_right;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_top_right, 
-                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
-                device_id_x+1, device_id_y-1,
-                device_id_x, device_id_y);
 
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
-            
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_top_right, 
+                    top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
+                    device_id_x+1, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
+                
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i*tile_total_input_width) + (j+left_write_offset)] = 
+                            boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_top_right);
             }
-           free(boundry_top_right);
 
             //SEND TOP RIGHT
             if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
@@ -348,18 +379,22 @@ void assemble_forward_group_data_device(network* net,
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                        }
-                    }  
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                            }
+                        }  
+                    }
+                
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
                 }
-              
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
                 free(transmit_data);
             }
         }
@@ -369,27 +404,32 @@ void assemble_forward_group_data_device(network* net,
             //receive left edges
 
             float* boundry_left;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_left, 
-                tile_input_height_original, left_boundry_edges, depth, RIGHT, 
-                device_id_x-1, device_id_y,
-                device_id_x, device_id_y);
 
-            int top_write_offset = (top_boundry_edges >= 0) ? top_boundry_edges : 0;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < tile_input_height_original; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_left, 
+                    tile_input_height_original, left_boundry_edges, depth, RIGHT, 
+                    device_id_x-1, device_id_y,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = (top_boundry_edges >= 0) ? top_boundry_edges : 0;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < tile_input_height_original; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + j] = boundry_left[(c*left_boundry_edges*tile_input_height_original) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + j] = 
+                            boundry_left[(c*left_boundry_edges*tile_input_height_original) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_left);
             }
-           free(boundry_left);
 
             //SEND LEFT
             if(device_id_x > 0){
@@ -398,18 +438,22 @@ void assemble_forward_group_data_device(network* net,
                 int cols = left_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                    }        
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        }        
+                    }
 
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
+                }
                 free(transmit_data);
 
             }
@@ -427,45 +471,54 @@ void assemble_forward_group_data_device(network* net,
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                        }
-                    }  
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                            }
+                        }  
+                    }
+                
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
                 }
-              
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
                 free(transmit_data);
 
             }
 
             float* boundry_right;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_right, 
-                tile_input_height_original, right_boundry_edges, depth, LEFT, 
-                device_id_x+1, device_id_y,
-                device_id_x, device_id_y);
 
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
-            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges) : 0;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < tile_input_height_original; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_right, 
+                    tile_input_height_original, right_boundry_edges, depth, LEFT, 
+                    device_id_x+1, device_id_y,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
+                int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges) : 0;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < tile_input_height_original; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_right[(c*right_boundry_edges*tile_input_height_original) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + (j+left_write_offset)] = 
+                            boundry_right[(c*right_boundry_edges*tile_input_height_original) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_right);
             }
-          free(boundry_right);
         } 
 
         // //Bottom left
@@ -477,43 +530,51 @@ void assemble_forward_group_data_device(network* net,
                 int cols = left_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
-                        }
-                    }  
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                            }
+                        }  
+                    }
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
                 }
-              
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
                 free(transmit_data);
             }
 
             float* boundry_bottom_left;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_bottom_left, 
-                bottom_boundry_edges, left_boundry_edges, depth, TOP_RIGHT, 
-                device_id_x-1, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
-            
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_bottom_left, 
+                    bottom_boundry_edges, left_boundry_edges, depth, TOP_RIGHT, 
+                    device_id_x-1, device_id_y+1,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
+                
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*(tile_total_input_width) + j] = boundry_bottom_left[(c*bottom_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*(tile_total_input_width) + j] = 
+                            boundry_bottom_left[(c*bottom_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_bottom_left);
             }
-           free(boundry_bottom_left);
         }
 
 
@@ -527,45 +588,54 @@ void assemble_forward_group_data_device(network* net,
                 int cols = featuremap_width;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*(rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*(rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                            }
                         }
-                    }
-                }        
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                    }        
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                }
+                
                 free(transmit_data);
-
             }
 
             //receive bottom edges
             float* boundry_bottom;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_bottom, 
-                bottom_boundry_edges, tile_input_width_original, depth, TOP, 
-                device_id_x, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_bottom, 
+                    bottom_boundry_edges, tile_input_width_original, depth, TOP, 
+                    device_id_x, device_id_y+1,
+                    device_id_x, device_id_y);
+
+                int bottom_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
+                int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges) : 0;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < tile_input_width_original; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+bottom_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
+                        for (int j = 0; j < tile_input_width_original; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+bottom_write_offset)*tile_total_input_width + (j+left_write_offset)] = 
+                            boundry_bottom[(c*bottom_boundry_edges*tile_input_width_original) + (i*tile_input_width_original) + j];
+                        }
                     }
                 }
+                free(boundry_bottom);
             }
-           free(boundry_bottom);
         }   
 
 
@@ -586,44 +656,53 @@ void assemble_forward_group_data_device(network* net,
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
-                {
-                    for (int i = 0; i < rows; ++i)
+                for(int sample_id = 0; sample_id < batches; sample_id++){
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[c*cols*rows + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
-                        }
-                    }    
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[c*cols*rows + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
+                            }
+                        }    
+                    }
             
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
+                }
+
                 free(transmit_data);
             }
 
             float* boundry_bottom_right;
-            get_forward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, 
-                &boundry_bottom_right, 
-                bottom_boundry_edges, right_boundry_edges, depth, TOP_LEFT, 
-                device_id_x+1, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
-            int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
-            
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                get_forward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, 
+                    &boundry_bottom_right, 
+                    bottom_boundry_edges, right_boundry_edges, depth, TOP_LEFT, 
+                    device_id_x+1, device_id_y+1,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = (top_boundry_edges >= 0) ? (top_boundry_edges + tile_input_height_original) : tile_input_height_original;
+                int left_write_offset = (left_boundry_edges >= 0) ? (left_boundry_edges + tile_input_width_original) : tile_input_width_original;
+            
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->input[(c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + (j+left_write_offset)] = boundry_bottom_right[(c*bottom_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+top_write_offset)*tile_total_input_width + (j+left_write_offset)]
+                            = boundry_bottom_right[(c*bottom_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_bottom_right);
             }
-           free(boundry_bottom_right);
         }
 
 
@@ -641,17 +720,20 @@ void assemble_forward_group_data_device(network* net,
 
         if(group_start_idx > 0){
 
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
+                    for (int i = 0; i < start_layer.featuremap_in_h_with_boundry; ++i)
                     {
-                        net->layers[group_start_idx - 1].output[(c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j] = 
-                            net->input[(c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j];
-                    }
-                }  
-            }         
+                        for (int j = 0; j < start_layer.featuremap_in_w_with_boundry; ++j)
+                        {
+                            net->layers[group_start_idx - 1].output[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j] = 
+                                net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i*start_layer.featuremap_in_w_with_boundry) + j];
+                        }
+                    }  
+                }     
+            }    
         }
 
 
@@ -661,10 +743,10 @@ void assemble_forward_group_data_device(network* net,
 void assemble_backward_group_data_device(network* net, 
                                 float* OUTPUT_DELTA,
                                 int NUM_TILES_X, int NUM_TILES_Y,
-                                 int group_end_idx,
-                                 int device_id_x, int device_id_y,
-                                 int num_layers
-                                 ){
+                                int group_end_idx,
+                                int device_id_x, int device_id_y,
+                                int num_layers
+                                ){
 
         layer end_layer = net->layers[group_end_idx];
 
@@ -683,6 +765,7 @@ void assemble_backward_group_data_device(network* net,
         int current_layer_idx = group_end_idx;
 
         int depth = (net->layers[group_end_idx].type == CONVOLUTIONAL) ? end_layer.n : end_layer.c;
+        int total_tile_sample_size = tile_total_delta_in_height*tile_total_delta_in_height*depth;
 
         int delta_width = net->layers[current_layer_idx].delta_in_w_without_boundry;
         int delta_height = net->layers[current_layer_idx].delta_in_h_without_boundry;
@@ -690,6 +773,9 @@ void assemble_backward_group_data_device(network* net,
         int x_dim = net->layers[current_layer_idx].delta_in_w_without_boundry;
         int y_dim = net->layers[current_layer_idx].delta_in_h_without_boundry;
         int z_dim = (net->layers[current_layer_idx].type == CONVOLUTIONAL) ? net->layers[current_layer_idx].n : net->layers[current_layer_idx].c;
+        int original_sample_size = (x_dim*y_dim*z_dim);
+
+        int batches = net->batch;
 
         float* transmit_data;
         int transmit_size;
@@ -709,14 +795,18 @@ void assemble_backward_group_data_device(network* net,
                     // printf("\n");
                 
 
-        memcpy(net->workspace, net->layers[current_layer_idx].delta, tile_delta_in_height*tile_delta_in_width*depth*sizeof(float));
-        for (int c = 0; c < depth; ++c)
-        {
-            for (int i = 0; i < (tile_delta_in_height); ++i)
+        memcpy(net->workspace, net->layers[current_layer_idx].delta, batches*tile_delta_in_height*tile_delta_in_width*depth*sizeof(float));
+        
+        for(int sample_id = 0; sample_id < batches; sample_id++){
+            for (int c = 0; c < depth; ++c)
             {
-                for (int j = 0; j < (tile_delta_in_width); ++j)
+                for (int i = 0; i < (tile_delta_in_height); ++i)
                 {
-                    net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_boundry_edges)*tile_total_delta_in_width + j+left_boundry_edges] = net->workspace[(c*tile_delta_in_width*tile_delta_in_height) + (i)*tile_delta_in_width + (j)];
+                    for (int j = 0; j < (tile_delta_in_width); ++j)
+                    {
+                        net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_boundry_edges)*tile_total_delta_in_width + j+left_boundry_edges] = 
+                        net->workspace[(sample_id*original_sample_size) + (c*tile_delta_in_width*tile_delta_in_height) + (i)*tile_delta_in_width + (j)];
+                    }
                 }
             }
         }
@@ -727,25 +817,30 @@ void assemble_backward_group_data_device(network* net,
         if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
 
             float* boundry_top_left;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_top_left, 
-                top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
-                device_id_x-1, device_id_y-1,
-                device_id_x, device_id_y);
 
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_top_left, 
+                    top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
+                    device_id_x-1, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + j] = boundry_top_left[(c*left_boundry_edges*top_boundry_edges) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + j] = 
+                            boundry_top_left[(c*left_boundry_edges*top_boundry_edges) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_top_left);
             }
-           free(boundry_top_left);
 
             //SEND TOP LEFT
             if((device_id_y > 0) && (device_id_x > 0)){
@@ -753,18 +848,22 @@ void assemble_backward_group_data_device(network* net,
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                    }    
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        }    
+                    }
             
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y-1);
+                }
                 free(transmit_data);
 
             }
@@ -774,29 +873,32 @@ void assemble_backward_group_data_device(network* net,
         if(top_boundry_edges > 0){
             //receive top edges
             float* boundry_top;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_top, 
-                top_boundry_edges, tile_delta_in_width, depth, BOTTOM, 
-                device_id_x, device_id_y-1,
-                device_id_x, device_id_y);
 
-            int left_write_offset = left_boundry_edges;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_top, 
+                    top_boundry_edges, tile_delta_in_width, depth, BOTTOM, 
+                    device_id_x, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = left_boundry_edges;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < tile_delta_in_width; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_boundry_edges)] = boundry_top[(c*top_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                        for (int j = 0; j < tile_delta_in_width; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_boundry_edges)] = 
+                            boundry_top[(c*top_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                        }
                     }
                 }
+                free(boundry_top);
             }
-            free(boundry_top);
-
-
 
             //SEND TOP
             if(device_id_y > 0){
@@ -804,19 +906,23 @@ void assemble_backward_group_data_device(network* net,
                 int cols = delta_width;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                    } 
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        } 
+                    }
                
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
-               free(transmit_data);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y-1);
+                }
+                free(transmit_data);
             }
         } 
 
@@ -824,27 +930,32 @@ void assemble_backward_group_data_device(network* net,
         // //Top right
         if((top_boundry_edges > 0) && (right_boundry_edges > 0)){
             float* boundry_top_right;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_top_right, 
-                top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
-                device_id_x+1, device_id_y-1,
-                device_id_x, device_id_y);
 
-            int left_write_offset = (left_boundry_edges + tile_delta_in_width);
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < top_boundry_edges; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_top_right, 
+                    top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
+                    device_id_x+1, device_id_y-1,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = (left_boundry_edges + tile_delta_in_width);
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < top_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_write_offset)] = boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i*tile_total_delta_in_width) + (j+left_write_offset)] = 
+                            boundry_top_right[(c*top_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_top_right);
             }
-           free(boundry_top_right);
 
             //SEND TOP RIGHT
             if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
@@ -853,18 +964,22 @@ void assemble_backward_group_data_device(network* net,
 
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                        }
-                    }     
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                            }
+                        }     
+                    }
            
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y-1);
+                }
                 free(transmit_data);
             }
         }
@@ -874,27 +989,32 @@ void assemble_backward_group_data_device(network* net,
             //receive left edges
 
             float* boundry_left;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_left, 
-                tile_delta_in_height, left_boundry_edges, depth, RIGHT, 
-                device_id_x-1, device_id_y,
-                device_id_x, device_id_y);
 
-            int top_write_offset = top_boundry_edges;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < tile_delta_in_height; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_left, 
+                    tile_delta_in_height, left_boundry_edges, depth, RIGHT, 
+                    device_id_x-1, device_id_y,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = top_boundry_edges;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < tile_delta_in_height; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + j] = boundry_left[(c*left_boundry_edges*tile_delta_in_height) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + j] = 
+                            boundry_left[(c*left_boundry_edges*tile_delta_in_height) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_left);
             }
-            free(boundry_left);
 
 
             //SEND LEFT
@@ -903,22 +1023,22 @@ void assemble_backward_group_data_device(network* net,
                 int rows = delta_height;
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-                //printf("Transmitting left\n");
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            //printf("%.2f ", transmit_data[i*cols + j]);
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j];
-                        }
-                       // printf("\n");
-                    }        
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j];
+                            }
+                        }        
+                    }
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
                 }
-                //printf("\n");
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y);
                 free(transmit_data);
 
             }
@@ -933,53 +1053,56 @@ void assemble_backward_group_data_device(network* net,
                 int rows = delta_height;
                 int cols = left_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
-               // printf("Transmitting right rows = %d cols = %d \n", rows, cols);
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
+                            for (int j = 0; j < cols; ++j)
+                            {
 
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
-                            //printf("%.2f ", transmit_data[i*cols + j]);
-                        }
-                       // printf("\n");
-                    }  
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i)*x_dim + j+x_dim-cols];
+                            }
+                        }  
+                    }
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
                 }
-
-                //printf("\n");      
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y);
                 free(transmit_data);
-
             }
 
             //receive right edges
             float* boundry_right;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_right, 
-                tile_delta_in_height, right_boundry_edges, depth, LEFT, 
-                device_id_x+1, device_id_y,
-                device_id_x, device_id_y);
 
-            int left_write_offset = left_boundry_edges + tile_delta_in_width;
-            int top_write_offset = top_boundry_edges;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < tile_delta_in_height; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_right, 
+                    tile_delta_in_height, right_boundry_edges, depth, LEFT, 
+                    device_id_x+1, device_id_y,
+                    device_id_x, device_id_y);
+
+                int left_write_offset = left_boundry_edges + tile_delta_in_width;
+                int top_write_offset = top_boundry_edges;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < tile_delta_in_height; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_right[(c*right_boundry_edges*tile_delta_in_height) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = 
+                            boundry_right[(c*right_boundry_edges*tile_delta_in_height) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
-            }
 
-           free(boundry_right);
+                free(boundry_right);
+            }
         } 
 
         // //Bottom left
@@ -991,42 +1114,52 @@ void assemble_backward_group_data_device(network* net,
                 int cols = right_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
-                        }
-                    }       
-                } 
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                            }
+                        }       
+                    } 
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x-1, device_id_y+1);
+                }
+
                 free(transmit_data);
             }
 
             float* boundry_bottom_left;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_bottom_left, 
-                bottom_boundry_edges, left_boundry_edges, depth, TOP_RIGHT, 
-                device_id_x-1, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int top_write_offset = top_boundry_edges + tile_delta_in_height;
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_bottom_left, 
+                    bottom_boundry_edges, left_boundry_edges, depth, TOP_RIGHT, 
+                    device_id_x-1, device_id_y+1,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = top_boundry_edges + tile_delta_in_height;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < left_boundry_edges; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*(tile_total_delta_in_width) + j] = boundry_bottom_left[(c*bottom_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        for (int j = 0; j < left_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*(tile_total_delta_in_width) + j] = 
+                            boundry_bottom_left[(c*bottom_boundry_edges*left_boundry_edges) + (i*left_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_bottom_left);
             }
-            free(boundry_bottom_left);
         }
 
         // //Bottom 
@@ -1039,46 +1172,53 @@ void assemble_backward_group_data_device(network* net,
                 int cols = delta_width;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
+                for(int sample_id = 0; sample_id < batches; sample_id++)
                 {
-                    for (int i = 0; i < rows; ++i)
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
-                        }
-                    } 
-                }
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j];
+                            }
+                        } 
+                    }
                
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x, device_id_y+1);
+                }
                 free(transmit_data);
-
             }
 
             //receive bottom edges
             float* boundry_bottom;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_bottom, 
-                bottom_boundry_edges, tile_delta_in_width, depth, TOP, 
-                device_id_x, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
-            int left_write_offset = left_boundry_edges;
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_bottom, 
+                    bottom_boundry_edges, tile_delta_in_width, depth, TOP, 
+                    device_id_x, device_id_y+1,
+                    device_id_x, device_id_y);
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                int bottom_write_offset = top_boundry_edges + tile_delta_in_height;
+                int left_write_offset = left_boundry_edges;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < tile_delta_in_width; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+bottom_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom[(c*bottom_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                        for (int j = 0; j < tile_delta_in_width; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+bottom_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = 
+                            boundry_bottom[(c*bottom_boundry_edges*tile_delta_in_width) + (i*tile_delta_in_width) + j];
+                        }
                     }
                 }
+                free(boundry_bottom);
             }
-           free(boundry_bottom);
         }   
 
         // //Bottom right
@@ -1091,46 +1231,52 @@ void assemble_backward_group_data_device(network* net,
                 int cols = left_boundry_edges;
                 transmit_data = calloc((z_dim*rows*cols), sizeof(float));
 
-                for (int c = 0; c < z_dim; ++c)
-                {
-                    for (int i = 0; i < rows; ++i)
+                for(int sample_id = 0; sample_id < batches; sample_id++){
+                    for (int c = 0; c < z_dim; ++c)
                     {
-                        for (int j = 0; j < cols; ++j)
+                        for (int i = 0; i < rows; ++i)
                         {
-                            transmit_data[(c*rows*cols) + i*cols + j] = src_structure[(c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
-                        }
-                    }  
+                            for (int j = 0; j < cols; ++j)
+                            {
+                                transmit_data[(c*rows*cols) + i*cols + j] = 
+                                src_structure[(sample_id*original_sample_size) + (c*x_dim*y_dim) + (i+y_dim-rows)*x_dim + j+x_dim-cols];
+                            }
+                        }  
+                    }
+                    send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
                 }
-              
-                send_boundry(transmit_data, z_dim*rows*cols, device_id_x+1, device_id_y+1);
                 free(transmit_data);
             }
 
 
             float* boundry_bottom_right;
-            get_backward_group_boundry_data_device(
-                NUM_TILES_X, NUM_TILES_Y,
-                current_layer_idx, num_layers,
-                &boundry_bottom_right, 
-                bottom_boundry_edges, right_boundry_edges, depth, TOP_LEFT, 
-                device_id_x+1, device_id_y+1,
-                device_id_x, device_id_y);
 
-            int top_write_offset = top_boundry_edges + tile_delta_in_height;
-            int left_write_offset = left_boundry_edges + tile_delta_in_width;
-
-
-            for (int c = 0; c < depth; ++c)
+            for(int sample_id = 0; sample_id < batches; sample_id++)
             {
-                for (int i = 0; i < bottom_boundry_edges; ++i)
+                get_backward_group_boundry_data_device(
+                    NUM_TILES_X, NUM_TILES_Y,
+                    current_layer_idx, num_layers,
+                    &boundry_bottom_right, 
+                    bottom_boundry_edges, right_boundry_edges, depth, TOP_LEFT, 
+                    device_id_x+1, device_id_y+1,
+                    device_id_x, device_id_y);
+
+                int top_write_offset = top_boundry_edges + tile_delta_in_height;
+                int left_write_offset = left_boundry_edges + tile_delta_in_width;
+
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int j = 0; j < right_boundry_edges; ++j)
+                    for (int i = 0; i < bottom_boundry_edges; ++i)
                     {
-                        net->layers[current_layer_idx].delta[(c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = boundry_bottom_right[(c*bottom_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        for (int j = 0; j < right_boundry_edges; ++j)
+                        {
+                            net->layers[current_layer_idx].delta[(sample_id*total_tile_sample_size) + (c*tile_total_delta_in_width*tile_total_delta_in_height) + (i+top_write_offset)*tile_total_delta_in_width + (j+left_write_offset)] = 
+                            boundry_bottom_right[(c*bottom_boundry_edges*right_boundry_edges) + (i*right_boundry_edges) + j];
+                        }
                     }
                 }
+                free(boundry_bottom_right);
             }
-           free(boundry_bottom_right);
         }
 
 
@@ -1160,6 +1306,8 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
     int x_dim = net->layers[layer_idx].featuremap_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].featuremap_in_h_with_boundry;
     int depth = net->layers[layer_idx].c;
+    int total_tile_sample_size = x_dim*y_dim*depth;
+    int batches = net->batch;
 
     if(layer_idx > 0){
 
@@ -1167,13 +1315,15 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
             int rows = net->layers[layer_idx].top_boundry_edges_featuremap;
             int cols = net->layers[layer_idx].featuremap_in_w_with_boundry;
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < rows; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < cols; ++n)
+                    for (int m = 0; m < rows; ++m)
                     {
-                        net->layers[layer_idx-1].output[(c*x_dim*y_dim) + m*cols + n] = 0.0;
+                        for (int n = 0; n < cols; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + m*cols + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1181,14 +1331,15 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 
         if(device_id_x == 0){
 
-
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_featuremap; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                     {
-                        net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_featuremap; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1196,13 +1347,15 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 
         if(device_id_y == (NUM_TILES_Y - 1)){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_featuremap; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_featuremap; ++m)
                     {
-                        net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m+net->layers[layer_idx].featuremap_in_h_without_boundry+net->layers[layer_idx].top_boundry_edges_featuremap)*net->layers[layer_idx].featuremap_in_w_with_boundry + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m+net->layers[layer_idx].featuremap_in_h_without_boundry+net->layers[layer_idx].top_boundry_edges_featuremap)*net->layers[layer_idx].featuremap_in_w_with_boundry + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1210,13 +1363,15 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 
         if(device_id_x == (NUM_TILES_X - 1)){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_featuremap; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                     {
-                        net->layers[layer_idx-1].output[(c*x_dim*y_dim) + (m)*net->layers[layer_idx].featuremap_in_w_with_boundry + n + net->layers[layer_idx].featuremap_in_w_without_boundry+net->layers[layer_idx].left_boundry_edges_featuremap] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_featuremap; ++n)
+                        {
+                            net->layers[layer_idx-1].output[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m)*net->layers[layer_idx].featuremap_in_w_with_boundry + n + net->layers[layer_idx].featuremap_in_w_without_boundry+net->layers[layer_idx].left_boundry_edges_featuremap] = 0.0;
+                        }
                     }
                 }
             }
@@ -1231,6 +1386,8 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
     int x_dim = net->layers[layer_idx].featuremap_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].featuremap_in_h_with_boundry;
     int depth = net->layers[layer_idx].c;
+    int total_tile_sample_size = x_dim*y_dim*depth;
+    int batches = net->batch;
 
     int device_id_y = ftp_params.DEVICE_ID_Y;
     int device_id_x = ftp_params.DEVICE_ID_X;
@@ -1242,7 +1399,7 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
     // if(layer_idx > 0)
     //     featuremap = net->layers[layer_idx-1].output;
     // else
-        featuremap = net->input;
+    featuremap = net->input;
 
     if(device_id_x == (NUM_TILES_X - 1)){
 
@@ -1250,13 +1407,15 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
         int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
 
         if(start_x_coordinate > -1){
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = net->layers[layer_idx].left_boundry_edges_featuremap + start_x_coordinate; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                     {
-                        featuremap[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        for (int n = net->layers[layer_idx].left_boundry_edges_featuremap + start_x_coordinate; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                        {
+                            featuremap[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1269,13 +1428,16 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
         int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx].start_y_coordinate;
 
         if(start_y_coordinate > -1){
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = net->layers[layer_idx].top_boundry_edges_featuremap + start_y_coordinate; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
+
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                    for (int m = net->layers[layer_idx].top_boundry_edges_featuremap + start_y_coordinate; m < net->layers[layer_idx].featuremap_in_h_with_boundry; ++m)
                     {
-                        featuremap[(c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].featuremap_in_w_with_boundry; ++n)
+                        {
+                            featuremap[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].featuremap_in_w_with_boundry) + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1290,18 +1452,22 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
     int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
     int depth = (net->layers[layer_idx].type == CONVOLUTIONAL) ? net->layers[layer_idx].n : net->layers[layer_idx].c;
+    int total_tile_sample_size = x_dim*y_dim*depth;
+    int batches = net->batch;
 
     if(layer_idx > 0){
 
         if(device_id_y == 0){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].top_boundry_edges_delta; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].top_boundry_edges_delta; ++m)
                     {
-                        net->layers[layer_idx].delta[(c*x_dim*y_dim) + m*net->layers[layer_idx].delta_in_w_with_boundry + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + m*net->layers[layer_idx].delta_in_w_with_boundry + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1309,13 +1475,15 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 
         if(device_id_x == 0){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_delta; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
                     {
-                        net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].left_boundry_edges_delta; ++n)
+                        {
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1323,13 +1491,15 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 
         if(device_id_y == (NUM_TILES_Y - 1)){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_delta; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].bottom_boundry_edges_delta; ++m)
                     {
-                        net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m+net->layers[layer_idx].delta_in_h_without_boundry+net->layers[layer_idx].top_boundry_edges_delta)*net->layers[layer_idx].delta_in_w_with_boundry + n] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
+                        {
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m+net->layers[layer_idx].delta_in_h_without_boundry+net->layers[layer_idx].top_boundry_edges_delta)*net->layers[layer_idx].delta_in_w_with_boundry + n] = 0.0;
+                        }
                     }
                 }
             }
@@ -1337,13 +1507,15 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 
         if(device_id_x == (NUM_TILES_X - 1)){
 
-            for (int c = 0; c < depth; ++c)
-            {
-                for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
+            for(int sample_id = 0; sample_id < batches; sample_id++){
+                for (int c = 0; c < depth; ++c)
                 {
-                    for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_delta; ++n)
+                    for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
                     {
-                        net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m)*net->layers[layer_idx].delta_in_w_with_boundry + n + net->layers[layer_idx].delta_in_w_without_boundry+net->layers[layer_idx].left_boundry_edges_delta] = 0.0;
+                        for (int n = 0; n < net->layers[layer_idx].right_boundry_edges_delta; ++n)
+                        {
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m)*net->layers[layer_idx].delta_in_w_with_boundry + n + net->layers[layer_idx].delta_in_w_without_boundry+net->layers[layer_idx].left_boundry_edges_delta] = 0.0;
+                        }
                     }
                 }
             }
@@ -1358,49 +1530,57 @@ void zero_out_spurious_edges_delta(network* net, int layer_idx){
     int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
     int depth = (net->layers[layer_idx].type == CONVOLUTIONAL) ? net->layers[layer_idx].n : net->layers[layer_idx].c;
+    int total_tile_sample_size = x_dim*y_dim*depth;
+    int batches = net->batch;
 
     int device_id_y = ftp_params.DEVICE_ID_Y;
     int device_id_x = ftp_params.DEVICE_ID_X;
     int NUM_TILES_X = ftp_params.NUM_TILES_X;
     int NUM_TILES_Y = ftp_params.NUM_TILES_Y;
 
-        if(device_id_x == (NUM_TILES_X - 1)){
+    if(device_id_x == (NUM_TILES_X - 1)){
 
-            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
-            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
+        int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
+        int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
 
-            if(start_x_coordinate > -1){
+        if(start_x_coordinate > -1){
+
+            for(int sample_id = 0; sample_id < batches; sample_id++){
                 for (int c = 0; c < depth; ++c)
                 {
                     for (int m = 0; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
                     {
                         for (int n = net->layers[layer_idx].left_boundry_edges_delta + start_x_coordinate; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
                         {
-                            net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
                         }
                     }
                 }
             }
         }
+    }
 
-        if(device_id_y == (NUM_TILES_Y - 1)){
+    if(device_id_y == (NUM_TILES_Y - 1)){
 
-            int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
-            int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
+        int start_x_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_x_coordinate;
+        int start_y_coordinate = network_params_tile.spurious_blocks[layer_idx+1].start_y_coordinate;
 
-            if(start_y_coordinate > -1){
+        if(start_y_coordinate > -1){
+
+            for(int sample_id = 0; sample_id < batches; sample_id++){
                 for (int c = 0; c < depth; ++c)
                 {
                     for (int m = net->layers[layer_idx].top_boundry_edges_delta + start_y_coordinate; m < net->layers[layer_idx].delta_in_h_with_boundry; ++m)
                     {
                         for (int n = 0; n < net->layers[layer_idx].delta_in_w_with_boundry; ++n)
                         {
-                            net->layers[layer_idx].delta[(c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
+                            net->layers[layer_idx].delta[(sample_id*total_tile_sample_size) + (c*x_dim*y_dim) + (m*net->layers[layer_idx].delta_in_w_with_boundry) + n] = 0.0;
                         }
                     }
                 }
             }
         }
+    }
 }
 
 void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
