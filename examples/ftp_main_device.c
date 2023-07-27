@@ -10,6 +10,9 @@
 #include "transport.h"
 #include "fused_device.h"
 
+#include <sys/time.h>
+#include <unistd.h>
+
 
 extern network_config network_params_original;
 extern network_config network_params_tile;
@@ -23,11 +26,8 @@ void backprop_layer0(network* net, float* INPUT_BOUNDRY);
 
 int main_device(int argc, char* argv[]){
 
-    clock_t begin;
-    clock_t end;
-
-    clock_t total_begin;
-    clock_t total_end;
+    struct timeval total_time_before, total_time_after, total_time_result;
+    struct timeval step_time_before, step_time_after, step_time_result;
 
     double total_time = 0.0;
     double total_computation_time = 0.0;
@@ -38,8 +38,6 @@ int main_device(int argc, char* argv[]){
     double filter_partial_updates_time = 0.0;
     double total_communication_time = 0.0;
 
-
-
     config_init(argc, argv);
     forward_pass();
     backward_pass();
@@ -49,12 +47,11 @@ int main_device(int argc, char* argv[]){
     network* net;
     init_network(&net);
 
-    float* INPUT_IMAGE = calloc(net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, sizeof(float));
-    float* OUTPUT_DELTA = calloc(net->layers[net->n - 1].outputs, sizeof(float));
+    float* INPUT_IMAGE = calloc(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, sizeof(float));
+    float* OUTPUT_DELTA = calloc(net->batch*net->layers[net->n - 1].outputs, sizeof(float));
 
-
-    total_begin = clock();
-    begin = clock();
+    gettimeofday(&total_time_before, NULL);
+    gettimeofday(&step_time_before, NULL);
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
 
@@ -67,39 +64,43 @@ int main_device(int argc, char* argv[]){
             for (int j = 0; j < ftp_params.NUM_TILES_Y; ++j)
             {
                 if(!((i == 0) && (j == 0))){
-                   send_boundry(INPUT_IMAGE, net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, i, j);
-                   send_boundry(OUTPUT_DELTA, net->layers[net->n - 1].outputs, i, j);
+                   send_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, i, j);
+                   send_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, i, j);
                 }
             }
         }
     }
     else{
-       receive_boundry(INPUT_IMAGE, net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0, 0);
-       receive_boundry(OUTPUT_DELTA, net->layers[net->n - 1].outputs, 0, 0);
+       receive_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0, 0);
+       receive_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, 0, 0);
     }
 
-    end = clock();
+    gettimeofday(&step_time_after, NULL);
 
-    memcpy(net->layers[net->n - 1].delta, OUTPUT_DELTA, net->layers[net->n - 1].outputs*sizeof(float));
+    memcpy(net->layers[net->n - 1].delta, OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs*sizeof(float));
 
-    total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
-    input_output_comm_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    timersub(&step_time_after, &step_time_before, &step_time_result);
 
-    net->inputs = net->layers[0].featuremap_in_h_with_boundry*
+    total_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+    input_output_comm_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+
+    net->inputs =   net->batch*
+                    net->layers[0].featuremap_in_h_with_boundry*
                     net->layers[0].featuremap_in_w_with_boundry*
                     net->layers[0].c;
 
     float* INPUT_BOUNDRY = calloc(net->inputs, sizeof(float));
 
-    // total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
-
     for (int g = 0; g < ftp_params.NUM_GROUPS_FORWARD; ++g)
     {
 
-        begin = clock();
+        gettimeofday(&step_time_before, NULL);
+
         int group_start_idx = ftp_params.sync_group_vector_forward[g];
         int group_end_idx = (g == (ftp_params.NUM_GROUPS_FORWARD - 1)) ? (net->n - 1) : (ftp_params.sync_group_vector_forward[g+1] - 1);
-        net->inputs = net->layers[group_start_idx].featuremap_in_h_with_boundry*
+        
+        net->inputs =   net->batch*
+                        net->layers[group_start_idx].featuremap_in_h_with_boundry*
                         net->layers[group_start_idx].featuremap_in_w_with_boundry*
                         net->layers[group_start_idx].c;
 
@@ -112,12 +113,14 @@ int main_device(int argc, char* argv[]){
                                          group_start_idx,
                                          ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y
                                          );
-        end = clock();
+        gettimeofday(&step_time_after, NULL);
 
-        total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
-        boundary_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
+        timersub(&step_time_after, &step_time_before, &step_time_result);
 
-        begin = clock();
+        total_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+        boundary_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+
+        gettimeofday(&step_time_before, NULL);
 
         if(g == 0){
             memcpy(INPUT_BOUNDRY, net->input, net->inputs*sizeof(float));
@@ -127,34 +130,9 @@ int main_device(int argc, char* argv[]){
 
         for (int l = group_start_idx; l <= group_end_idx; ++l)
         {
-
-
             zero_out_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
             zero_out_spurious_edges_featuremap(net, l);
             net->index = l;
-
-                // printf("%d\n", net->layers[l].featuremap_in_w_with_boundry);
-                // for (int i = 0; i < net->layers[l].featuremap_in_h_with_boundry; ++i)
-                // {
-                //     for (int j = 0; j < net->layers[l].featuremap_in_w_with_boundry; ++j)
-                //     {
-                //         printf("%.4f ", net->input[(i*net->layers[l].featuremap_in_w_with_boundry) + j]);
-                //     }
-                //     printf("\n");
-                // }
-                // printf("\n");
-
-                // printf("%d\n", net->layers[l].featuremap_in_w_with_boundry);
-                // for (int i = 0; i < net->layers[l].featuremap_in_h_with_boundry; ++i)
-                // {
-                //     for (int j = 0; j < net->layers[l].featuremap_in_w_with_boundry; ++j)
-                //     {
-                //         printf("%.4f ", net->input[(i*net->layers[l].featuremap_in_w_with_boundry) + j]);
-                //     }
-                //     printf("\n");
-                // }
-                // printf("\n");
-
 
             if(net->layers[l].type == CONVOLUTIONAL){
                 forward_convolutional_layer(net->layers[l], *net);
@@ -164,19 +142,6 @@ int main_device(int argc, char* argv[]){
                 forward_maxpool_layer(net->layers[l], *net);
             }
 
-            // if(l > 0){
-            //     for (int i = 0; i < net->layers[l-1].out_h; ++i)
-            //     {
-            //         for (int j = 0; j < net->layers[l-1].out_w; ++j)
-            //         {
-            //             printf("%.4f ", net->layers[l-1].output[(i*net->layers[l-1].out_w) + j]);
-            //         }
-            //         printf("\n");
-            //     }
-            //     printf("\n");
-            // }
-
-
             if(l == group_start_idx){
                 free(net->input);
             }
@@ -184,19 +149,12 @@ int main_device(int argc, char* argv[]){
             net->input = net->layers[l].output;
         }
 
-        end = clock();
-        total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
-        inference_time += (double)(end - begin) / CLOCKS_PER_SEC;
-    }
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
 
-    // for (int i = 0; i < net->layers[10].out_h; ++i)
-    // {
-    //     for (int j = 0; j < net->layers[10].out_w; ++j)
-    //     {
-    //         printf("%.4f ", net->layers[10].output[(i*net->layers[10].out_w) + j]);
-    //     }
-    //     printf("\n");
-    // }
+        total_computation_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+        inference_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+    }
 
     printf("Inference complete\n");
 
@@ -209,7 +167,7 @@ int main_device(int argc, char* argv[]){
     for (int g = (ftp_params.NUM_GROUPS_BACKWARD-1); g >= 0; --g)
     {
 
-        begin = clock();
+        gettimeofday(&step_time_before, NULL);
 
         int group_start_idx = (g == 0) ? (1) : (ftp_params.sync_group_vector_backward[g-1] + 1);
         int group_end_idx = ftp_params.sync_group_vector_backward[g];
@@ -221,14 +179,15 @@ int main_device(int argc, char* argv[]){
                                          ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y,
                                          net->n
                                          );
-        end = clock();
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
 
-        total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
-        boundary_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
+        total_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+        boundary_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
 
         printf("Received delta boundary. Starting backprop\n");
 
-        begin = clock();        
+        gettimeofday(&step_time_before, NULL);        
 
         for (int l = group_end_idx; l >= group_start_idx; --l)
         {
@@ -285,28 +244,6 @@ int main_device(int argc, char* argv[]){
             else if(net->layers[l].type == MAXPOOL)
                 backward_maxpool_layer(net->layers[l], *net);
 
-            // for (int m = 0; m < net->layers[l].out_h; ++m)
-            // {
-            //     for (int n = 0; n < net->layers[l].out_w; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < net->layers[l].h; ++m)
-            // {
-            //     for (int n = 0; n < net->layers[l].w; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[l-1].delta[m*net->layers[l].w + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
             if(net->layers[l].type == CONVOLUTIONAL){
 
                 int x_dim = net->layers[l].delta_in_w_without_boundry;
@@ -337,13 +274,6 @@ int main_device(int argc, char* argv[]){
 
                 net->layers[l].out_w = net->layers[l].delta_in_w_without_boundry;
                 net->layers[l].out_h = net->layers[l].delta_in_h_without_boundry;
-                // int spurious_coord_x = (network_params_tile.spurious_blocks[l].start_x_coordinate > -1) ? network_params_tile.spurious_blocks[l].start_x_coordinate : net->layers[l].featuremap_in_w_without_boundry;
-                // int spurious_coord_y = (network_params_tile.spurious_blocks[l].start_y_coordinate > -1) ? network_params_tile.spurious_blocks[l].start_y_coordinate : net->layers[l].featuremap_in_h_without_boundry;
-                // int spurious_edge_x = net->layers[l].featuremap_in_w_without_boundry - spurious_coord_x;
-                // int spurious_edge_y = net->layers[l].featuremap_in_h_without_boundry - spurious_coord_y;
-
-                // printf("sp %d\n", spurious_edge_x);
-                // printf("sp %d\n", spurious_edge_y);
                 net->layers[l].h = featuremap_without_boundry_height;
                 net->layers[l].w = featuremap_without_boundry_width;
 
@@ -359,28 +289,28 @@ int main_device(int argc, char* argv[]){
 
         }
 
-        end = clock();
-        total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
-        backprop_time += (double)(end - begin) / CLOCKS_PER_SEC;
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        total_computation_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+        backprop_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
 
     }
 
-    begin = clock();     
+    gettimeofday(&step_time_before, NULL);    
 
     backprop_layer0(net, INPUT_BOUNDRY);
 
     free(OUTPUT_DELTA);
 
-    end = clock();
-    total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
-    backprop_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    gettimeofday(&step_time_after, NULL);
+    timersub(&step_time_after, &step_time_before, &step_time_result);
+
+    total_computation_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+    backprop_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
 
     printf("Backprop complete\n");
 
-    begin = clock();
-
-
-
+    gettimeofday(&step_time_before, NULL);
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
         train_cycle_complete_sema_wait(current_device.num_tiles - 1);
@@ -395,13 +325,14 @@ int main_device(int argc, char* argv[]){
         filter_sync_complete_sema_wait(1);
     }
 
-    end = clock();
+    gettimeofday(&step_time_after, NULL);
+    timersub(&step_time_after, &step_time_before, &step_time_result);
 
-    total_communication_time += (double)(end - begin) / CLOCKS_PER_SEC;
-    filter_partial_updates_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    total_communication_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+    filter_partial_updates_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
 
 
-    begin = clock();
+    gettimeofday(&step_time_before, NULL);
     for (int l = 0; l < net->n; l++)
     {
         if(net->layers[l].type == CONVOLUTIONAL){
@@ -409,13 +340,16 @@ int main_device(int argc, char* argv[]){
             update_convolutional_layer(net->layers[l], a);
         }
     }
-    end = clock();
-    total_computation_time += (double)(end - begin) / CLOCKS_PER_SEC;
-    backprop_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    gettimeofday(&step_time_after, NULL);
+    timersub(&step_time_after, &step_time_before, &step_time_result);
+    total_computation_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+    backprop_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
 
 
-    total_end = clock();
-    total_time += (double)(total_end - total_begin) / CLOCKS_PER_SEC;
+    // total_end = clock();
+    gettimeofday(&total_time_after, NULL);
+    timersub(&total_time_after, &total_time_before, &total_time_result);
+    total_time += (double)(total_time_result.tv_sec + (total_time_result.tv_usec)/1000000.0);
 
 
             for (int m = 0; m < 3; ++m)
@@ -507,142 +441,6 @@ int main_device(int argc, char* argv[]){
                 
             }
             printf("\n");
-
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[5].weight_updates[m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[5].weight_updates[9 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[5].weight_updates[18 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[5].weight_updates[27 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[8].weight_updates[m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[8].weight_updates[9 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[8].weight_updates[18 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.2f ", net->layers[8].weight_updates[27 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.4f ", net->layers[10].weight_updates[m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.4f ", net->layers[10].weight_updates[9 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.4f ", net->layers[10].weight_updates[18 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
-
-            // for (int m = 0; m < 3; ++m)
-            // {
-            //     for (int n = 0; n < 3; ++n)
-            //     {
-            //         printf("%.4f ", net->layers[10].weight_updates[27 + m*3 + n]);
-            //     }
-            //     printf("\n");
-                
-            // }
-            // printf("\n");
 
             printf("Total Time = %.4f\n", total_time);
             printf("Total Communication Time = %.4f\n", total_communication_time);
