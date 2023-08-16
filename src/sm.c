@@ -14,11 +14,13 @@
 
 #define SEM_MUTEX_NAME "/sem-mutex"
 #define SEM_BUFFER_COUNT_NAME "/sem-buffer-count"
+#define SEM_INIT_COMPLETE "/sem-init-complete-signal"
 #define SEM_TRAIN_CYCLE_COMPLETE "/sem-train-signal"
 #define SEM_FILTER_SYNC_COMPLETE "/filter-sync-complete-signal"
 #define SHARED_MEM_NAME "/posix-shared-mem"
 
 int fd_shm = -1;
+sem_t *init_complete_mutex;
 sem_t *sm_create_mutex;
 sem_t *sm_train_mutex;
 sem_t *sm_filter_sync_mutex;
@@ -35,6 +37,10 @@ void create_sm(char* shm_file, float** buffer, int num_processes, int size_per_p
 
     if ((sm_filter_sync_mutex = sem_open (SEM_FILTER_SYNC_COMPLETE, O_CREAT, 0660, 0)) == SEM_FAILED)
         error ("sem_open");
+
+    if ((init_complete_mutex = sem_open (SEM_INIT_COMPLETE, O_CREAT, 0660, 0)) == SEM_FAILED)
+        error ("sem_open");
+
 
 	printf("%s\n", shm_file);
     if ((fd_shm = shm_open (shm_file, O_RDWR | O_CREAT | O_EXCL, 0660)) == -1)
@@ -64,6 +70,7 @@ void get_sm_buffer(char* shm_file, float** buffer, int num_processes, int size_p
     while( ((sm_create_mutex = sem_open (SEM_MUTEX_NAME, 0, 0, 0)) == SEM_FAILED) );
     while( ((sm_train_mutex = sem_open (SEM_TRAIN_CYCLE_COMPLETE, 0, 0, 0)) == SEM_FAILED) );
     while( ((sm_filter_sync_mutex = sem_open (SEM_FILTER_SYNC_COMPLETE, 0, 0, 0)) == SEM_FAILED) );
+    while( ((init_complete_mutex = sem_open (SEM_INIT_COMPLETE, 0, 0, 0)) == SEM_FAILED) );
 
         // error ("sem_open");
 
@@ -123,6 +130,22 @@ void filter_sync_complete_sema_post(int num_processes){
     for (int i = 0; i < num_processes; ++i)
     {
         if (sem_post (sm_filter_sync_mutex) == -1)
+            error ("sem_post: mutex_sem");
+    }    
+}
+
+void init_complete_sema_wait(int num_processes){
+    for (int i = 0; i < num_processes; ++i)
+    {
+        if (sem_wait (init_complete_mutex) == -1)
+            error ("sem_wait: mutex_sem");    
+    }
+}
+
+void init_complete_sema_post(int num_processes){
+    for (int i = 0; i < num_processes; ++i)
+    {
+        if (sem_post (init_complete_mutex) == -1)
             error ("sem_post: mutex_sem");
     }    
 }

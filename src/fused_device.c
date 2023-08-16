@@ -158,7 +158,7 @@ void init_network(network** net_inp){
     net->cost = calloc(1, sizeof(float));
     net->batch = network_params_tile.batch_size;
 
-
+    printf("NET BATCH = %d\n", net->batch);
 
     for (int i = 0; i < net->n; ++i)
     {

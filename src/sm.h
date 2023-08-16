@@ -8,7 +8,8 @@ void sm_sema_wait(int num_processes);
 void sm_sema_post(int num_processes);
 void train_cycle_complete_sema_wait(int num_processes);
 void train_cycle_complete_sema_post(int num_processes);
-
+void init_complete_sema_wait(int num_processes);
+void init_complete_sema_post(int num_processes);
 
 #endif SM_H
 

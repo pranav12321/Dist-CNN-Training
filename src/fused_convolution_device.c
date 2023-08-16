@@ -14,7 +14,7 @@ extern ftp_config ftp_params;
 extern device_tile current_tile;
 extern network_device current_device;
 extern ftp_network ftp_cluster;
-
+int cumulative = 0;
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     int current_layer_idx, 
@@ -31,6 +31,10 @@ void get_forward_group_boundry_data_device(
     int y_dim; 
 
     float* boundry_src_data;
+
+    cumulative += rows*cols*depth;
+    printf("CUMULATIVE %d\n", cumulative);
+    //usleep(depth*rows*cols);
 
     if((device_src_id_x >= NUM_TILES_X) && 
         (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
@@ -52,8 +56,10 @@ void get_forward_group_boundry_data_device(
         fill_cpu(depth*rows*cols, 0, *device_data, 1);
         return;
     }
-    printf("To receive: %d\n", rows*cols*depth);
-
+      printf("To receive: %d\n", rows*cols*depth);
+ //   cumulative += rows*cols*depth;
+ //   printf("CUMULATIVE %d\n", cumulative);
+ //   usleep(depth*rows*cols*200);
     receive_boundry(boundry_data, depth*rows*cols, device_src_id_x, device_src_id_y);
 
 }
