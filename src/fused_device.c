@@ -113,9 +113,8 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_forward[15] = 15;
 
     ftp_params.NUM_GROUPS_BACKWARD = num_layers - 1;
-    //ftp_params.NUM_GROUPS_BACKWARD = 1;
 
-    ftp_params.sync_group_vector_backward[0] = 1;// 3, 5, 7, 10};
+    ftp_params.sync_group_vector_backward[0] = 1;
     ftp_params.sync_group_vector_backward[1] = 2;
     ftp_params.sync_group_vector_backward[2] = 3;
     ftp_params.sync_group_vector_backward[3] = 4;
@@ -131,19 +130,8 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_backward[13] = 14;
     ftp_params.sync_group_vector_backward[14] = 15;
 
-   // ftp_params.sync_group_vector_backward[0] = 10;
-    // printf("%d\n", ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3);
-    // printf("%d\n", ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 4);
-    // printf("%s\n", argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 2 ]);
-    // printf("%s\n", argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3 ]);
-    // while(1);
     ftp_params.DEVICE_ID_X = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 3 ]);
     ftp_params.DEVICE_ID_Y = atoi(argv[ftp_params.NUM_TILES_Y*ftp_params.NUM_TILES_X + 4 ]);
-
-    //for (int i = 0; i < ftp_params.NUM_GROUPS_FORWARD; ++i)
-    //{
-    //    /* code */
-    //}
 }
 
 void init_network(network** net_inp){
@@ -157,8 +145,6 @@ void init_network(network** net_inp){
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
     net->batch = network_params_tile.batch_size;
-
-    printf("NET BATCH = %d\n", net->batch);
 
     for (int i = 0; i < net->n; ++i)
     {
@@ -199,8 +185,6 @@ void init_network(network** net_inp){
                              network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0); 
         }
 
-        //net->layers[i].delta = calloc(l.batch*l.outputs*10, sizeof(float));
-
         net->layers[i].featuremap_in_w_without_boundry = network_params_tile.featuremap_dim_without_boundry_vector[i].x_dim;
         net->layers[i].featuremap_in_h_without_boundry = network_params_tile.featuremap_dim_without_boundry_vector[i].y_dim;
         net->layers[i].featuremap_in_w_with_boundry = network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim;
@@ -226,10 +210,6 @@ void init_network(network** net_inp){
 
     }
 
-
-
-
-
     int max = 0;
     for (int i = 0; i < net->n; ++i)
     {
@@ -250,8 +230,8 @@ void forward_pass(){
 
     dim net_last_layer_dim_original = network_params_original.delta_dim_without_boundry_vector[num_layers-1];
 
-    network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].x_dim = network_params_tile.stride_vector[num_layers-1]*(net_last_layer_dim_original.x_dim + (ftp_params.NUM_TILES_X - 1))/ftp_params.NUM_TILES_X;
-    network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].y_dim = network_params_tile.stride_vector[num_layers-1]*(net_last_layer_dim_original.y_dim + (ftp_params.NUM_TILES_Y - 1))/ftp_params.NUM_TILES_Y;
+    network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].x_dim = network_params_tile.stride_vector[num_layers-1]*((net_last_layer_dim_original.x_dim + (ftp_params.NUM_TILES_X - 1))/ftp_params.NUM_TILES_X);
+    network_params_tile.featuremap_dim_without_boundry_vector[num_layers-1].y_dim = network_params_tile.stride_vector[num_layers-1]*((net_last_layer_dim_original.y_dim + (ftp_params.NUM_TILES_Y - 1))/ftp_params.NUM_TILES_Y);
 
     if(ftp_params.DEVICE_ID_X == (ftp_params.NUM_TILES_X - 1)){ 
 

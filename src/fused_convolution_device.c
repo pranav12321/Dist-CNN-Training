@@ -14,7 +14,9 @@ extern ftp_config ftp_params;
 extern device_tile current_tile;
 extern network_device current_device;
 extern ftp_network ftp_cluster;
+
 int cumulative = 0;
+
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     int current_layer_idx, 
@@ -31,10 +33,6 @@ void get_forward_group_boundry_data_device(
     int y_dim; 
 
     float* boundry_src_data;
-
-    cumulative += rows*cols*depth;
-    printf("CUMULATIVE %d\n", cumulative);
-    //usleep(depth*rows*cols);
 
     if((device_src_id_x >= NUM_TILES_X) && 
         (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
@@ -56,10 +54,8 @@ void get_forward_group_boundry_data_device(
         fill_cpu(depth*rows*cols, 0, *device_data, 1);
         return;
     }
-      printf("To receive: %d\n", rows*cols*depth);
- //   cumulative += rows*cols*depth;
- //   printf("CUMULATIVE %d\n", cumulative);
- //   usleep(depth*rows*cols*200);
+    printf("To receive: %d\n", rows*cols*depth);
+
     receive_boundry(boundry_data, depth*rows*cols, device_src_id_x, device_src_id_y);
 
 }
@@ -227,7 +223,7 @@ void assemble_forward_group_data_device(network* net,
                     for (int j = 0; j < num_core_img_elements_x; ++j)
                     {
                         net->input[(sample_id*total_tile_sample_size) + (c*tile_total_input_width*tile_total_input_height) + (i+core_img_write_start_offset_y)*tile_total_input_width + (j+core_img_write_start_offset_x)] = 
-                        group_initial_featuremap[(sample_id*total_tile_sample_size) + (c*tile_input_width_original*tile_input_height_original) + ((i+core_img_read_start_offset_y)*tile_input_width_original) + (j+core_img_read_start_offset_x)];
+                        group_initial_featuremap[(sample_id*original_sample_size) + (c*tile_input_width_original*tile_input_height_original) + ((i+core_img_read_start_offset_y)*tile_input_width_original) + (j+core_img_read_start_offset_x)];
                     }
                 }
             }

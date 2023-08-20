@@ -64,9 +64,9 @@ int main_device(int argc, char* argv[]){
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
 
-        fill_cpu(net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0.1, INPUT_IMAGE, 1);
-        fill_cpu(net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
-        fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+        fill_cpu(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0.1, INPUT_IMAGE, 1);
+        fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
+        fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
 
         for (int i = 0; i < ftp_params.NUM_TILES_X; ++i)
         {
@@ -81,8 +81,7 @@ int main_device(int argc, char* argv[]){
     }
     else{
        cumulative += (net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c);
-       printf("CUMULATIVE = %d\n",  cumulative);
-       usleep(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c*50);
+       //printf("CUMULATIVE = %d\n",  cumulative);
        receive_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0, 0);
        receive_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, 0, 0);
     }
@@ -327,6 +326,51 @@ int main_device(int argc, char* argv[]){
 
     printf("Backprop complete\n");
 
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[9 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[18 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+            for (int m = 0; m < 3; ++m)
+            {
+                for (int n = 0; n < 3; ++n)
+                {
+                    printf("%.2f ", net->layers[0].weight_updates[27 + m*3 + n]);
+                }
+                printf("\n");
+                
+            }
+            printf("\n");
+
+
     gettimeofday(&step_time_before, NULL);
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
@@ -538,7 +582,7 @@ void backprop_layer0(network* net, float* INPUT_BOUNDRY){
         }
     }
 
-    memcpy(INPUT_BOUNDRY, net->workspace, net->layers[0].c*featuremap_without_boundry_height*featuremap_without_boundry_width*sizeof(float));
+    memcpy(INPUT_BOUNDRY, net->workspace, net->batch*net->layers[0].c*featuremap_without_boundry_height*featuremap_without_boundry_width*sizeof(float));
    
     net->layers[0].out_w = net->layers[0].delta_in_w_with_boundry;
     net->layers[0].out_h = net->layers[0].delta_in_h_with_boundry;

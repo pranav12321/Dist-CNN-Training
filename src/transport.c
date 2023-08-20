@@ -385,7 +385,6 @@ void init_transport(char* argv[]){
 #define ACK_SIZE 9
 char* ack = "RECEIVED";
 
-
 void send_boundry(float* data, int size, int device_id_x, int device_id_y){
 
 
