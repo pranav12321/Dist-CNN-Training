@@ -11,7 +11,7 @@
 
 #define LAYER_SIZE 608
 #define FILTER_SIZE 32
-#define BATCH_SIZE 2
+#define BATCH_SIZE 1
 
 int main_yolo(){
     //make_convolutional_layer(int batch, int h,
@@ -118,17 +118,30 @@ int main_yolo(){
 
     }
 
-    // for(int b = 0; b < (net->layers[net->n - 1].batch); b++){
-    //     int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
+
+    // for(int b = 0; b < (net->layers[0].batch); b++){
+    //     int sample_size = net->layers[0].out_h*net->layers[0].out_w;
     //     printf("batch %d\n", b);
-    //     for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
-    //         for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
-    //             printf("%.2f ", net->layers[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
+    //     for(int i = 0; i < (net->layers[0].out_h); i++){
+    //         for(int j = 0; j < (net->layers[0].out_w); j++){
+    //             printf("%.4f ", net->layers[0].output[(b*sample_size) + (i*net->layers[0].out_w) + j]);
     //         }
     //         printf("\n");
     //     }
     //     printf("\n\n");
     // }
+
+     for(int b = 0; b < (net->layers[net->n - 1].batch); b++){
+         int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
+         printf("batch %d\n", b);
+         for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
+             for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
+                 printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
+             }
+             printf("\n");
+         }
+         printf("\n\n");
+     }
 
     update_args a;
     a.batch = net->batch;
@@ -146,7 +159,7 @@ int main_yolo(){
         net->layers[l].learning_rate_scale = 1.0;
         update_convolutional_layer(net->layers[l], a);
 
-        printf("Delta layer %d\n", l);
+        // printf("Delta layer %d\n", l);
 
         // for (int m = 0; m < net->layers[l].out_h; ++m)
         // {
@@ -173,21 +186,6 @@ int main_yolo(){
     //     }
     //     printf("\n");
     }
-
-    // for(int b = 0; b < (net->layers[0].batch); b++){
-    //     int sample_size = net->layers[0].out_h*net->layers[0].out_w;
-    //     printf("batch %d\n", b);
-    //     for (int m = 0; m < net->layers[0].out_h; ++m)
-    //     {
-    //         for (int n = 0; n < net->layers[0].out_w; ++n)
-    //         {
-    //             printf("%.2f ", net->layers[0].delta[(b*sample_size) + m*net->layers[0].out_w + n]);
-    //         }
-    //         printf("\n");
-            
-    //     }
-    //     printf("\n\n");
-    // }
 
         net->index = 0;
         net->input = calloc(net->batch*net->inputs, sizeof(float));

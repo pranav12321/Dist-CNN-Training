@@ -93,7 +93,7 @@ void config_init(int argc, char* argv[]){
         network_params_tile.delta_dim_with_boundry_vector[i].depth = network_params_tile.featuremap_dim_with_boundry_vector[i+1].depth;
     }
 
-    ftp_params.NUM_GROUPS_FORWARD = num_layers;
+    ftp_params.NUM_GROUPS_FORWARD = 1;//num_layers;
 
     ftp_params.sync_group_vector_forward[0] = 0;
     ftp_params.sync_group_vector_forward[1] = 1;
