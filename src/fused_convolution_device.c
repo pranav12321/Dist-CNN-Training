@@ -20,11 +20,12 @@ int cumulative = 0;
 void get_forward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     float** device_data, 
-    int rows, int cols, int depth, orientation region,
+    int rows, int cols, int depth, int batch,
+    orientation region,
     int device_src_id_x, int device_src_id_y, 
     int device_dst_id_x, int device_dst_id_y){
 
-    float* boundry_data = calloc(rows*cols*depth, sizeof(float));
+    float* boundry_data = calloc(rows*cols*depth*batch, sizeof(float));
     *device_data = boundry_data;
     //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
 
@@ -35,27 +36,27 @@ void get_forward_group_boundry_data_device(
 
     if((device_src_id_x >= NUM_TILES_X) && 
         (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
-        fill_cpu(depth*rows*cols, 0, *device_data, 1);
+        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_x < 0) && 
         (region == TOP_RIGHT || region == RIGHT || region == BOTTOM_RIGHT)){
-        fill_cpu(depth*rows*cols, 0, *device_data, 1);
+        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_y >= NUM_TILES_Y) && 
         (region == TOP_LEFT || region == TOP || region == TOP_RIGHT)){
-        fill_cpu(depth*rows*cols, 0, *device_data, 1);
+        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_y < 0) && 
         (region == BOTTOM_LEFT || region == BOTTOM || region == BOTTOM_RIGHT)){
-        fill_cpu(depth*rows*cols, 0, *device_data, 1);
+        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
         return;
     }
-    printf("To receive: %d\n", rows*cols*depth);
+    printf("To receive: %d\n", rows*cols*depth*batch);
 
-    receive_boundry(boundry_data, depth*rows*cols, device_src_id_x, device_src_id_y);
+    receive_boundry(boundry_data, batch*depth*rows*cols, device_src_id_x, device_src_id_y);
 
 }
 
@@ -63,11 +64,12 @@ void get_forward_group_boundry_data_device(
 void get_backward_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     float** device_data, 
-    int rows, int cols, int depth, orientation region,
+    int rows, int cols, int depth, int batch,
+    orientation region,
     int device_src_id_x, int device_src_id_y, 
     int device_dst_id_x, int device_dst_id_y) {
 
-    float* boundry_data = calloc(rows*cols*depth, sizeof(float));
+    float* boundry_data = calloc(rows*cols*depth*batch, sizeof(float));
     *device_data = boundry_data;
     //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
 
@@ -78,26 +80,26 @@ void get_backward_group_boundry_data_device(
 
     if((device_src_id_x >= NUM_TILES_X) && 
         (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
-        fill_cpu(rows*cols*depth, 0, *device_data, 1);
+        fill_cpu(rows*cols*depth*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_x < 0) && 
         (region == TOP_RIGHT || region == RIGHT || region == BOTTOM_RIGHT)){
-        fill_cpu(rows*cols*depth, 0, *device_data, 1);
+        fill_cpu(rows*cols*depth*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_y >= NUM_TILES_Y) && 
         (region == TOP_LEFT || region == TOP || region == TOP_RIGHT)){
-        fill_cpu(rows*cols*depth, 0, *device_data, 1);
+        fill_cpu(rows*cols*depth*batch, 0, *device_data, 1);
         return;
     }
     if((device_src_id_y < 0) && 
         (region == BOTTOM_LEFT || region == BOTTOM || region == BOTTOM_RIGHT)){
-        fill_cpu(rows*cols*depth, 0, *device_data, 1);
+        fill_cpu(rows*cols*depth*batch, 0, *device_data, 1);
         return;
     }
 
-    receive_boundry(boundry_data, rows*cols*depth, device_src_id_x, device_src_id_y);
+    receive_boundry(boundry_data, rows*cols*depth*batch, device_src_id_x, device_src_id_y);
 
 }
 
@@ -811,9 +813,9 @@ void devices_send_partial_weight_updates(network* net, int NUM_TILES_Y, int NUM_
     filter_sync_complete_sema_post(num_tiles_in_device - 1);
 }
 
-void pos_correct_maxpool_indices(float* data, int stride,
+void pos_correct_maxpool_indices(int* data, int stride,
                                 int width_pool_in_forward,
-                                int width_pool_out_backward, int height_pool_out_backward, int depth_pool_out_backward, int batch){
+                                int height_pool_out_backward, int width_pool_out_backward, int depth_pool_out_backward, int batch){
     for(int b = 0; b < batch; b++){
         for(int d = 0; d < depth_pool_out_backward; d++){
             for(int h = 0; h < height_pool_out_backward; h++){
@@ -832,6 +834,73 @@ void pos_correct_maxpool_indices(float* data, int stride,
             }
         }
     }
+}
+
+void assemble_pool_indices(network* net, int l, int device_id_x, int device_id_y, int NUM_TILES_X, int NUM_TILES_Y){
+
+    int* tile_core_pool_indices = calloc(net->batch*net->layers[l].delta_in_h_with_boundry*net->layers[l].delta_in_w_with_boundry*net->layers[l].c, sizeof(int));
+    
+    int left_extra_edges_pool_backward = net->layers[l].left_boundry_edges_delta - 
+                                         (net->layers[l].left_boundry_edges_featuremap / net->layers[l].stride);
+    int right_extra_edges_pool_backward = net->layers[l].right_boundry_edges_delta - 
+                                         (net->layers[l].right_boundry_edges_featuremap / net->layers[l].stride);
+    int bottom_extra_edges_pool_backward = net->layers[l].bottom_boundry_edges_delta - 
+                                         (net->layers[l].bottom_boundry_edges_featuremap / net->layers[l].stride);
+    int top_extra_edges_pool_backward = net->layers[l].top_boundry_edges_delta - 
+                                         (net->layers[l].top_boundry_edges_featuremap / net->layers[l].stride);
+    
+    printf("%d %d %d %d\n", left_extra_edges_pool_backward, right_extra_edges_pool_backward, bottom_extra_edges_pool_backward, top_extra_edges_pool_backward);
+
+    if(left_extra_edges_pool_backward < 0)
+        left_extra_edges_pool_backward = 0;
+    if(right_extra_edges_pool_backward < 0)
+        right_extra_edges_pool_backward = 0;
+    if(top_extra_edges_pool_backward < 0)
+        top_extra_edges_pool_backward = 0;
+    if(bottom_extra_edges_pool_backward < 0)
+        bottom_extra_edges_pool_backward = 0;
+
+    copy_slice((float*) tile_core_pool_indices, net->layers[l].indexes, net->batch, net->layers[l].c,
+        net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
+        net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
+        net->layers[l].delta_in_h_with_boundry, net->layers[l].delta_in_w_with_boundry,
+        0, 0, left_extra_edges_pool_backward, top_extra_edges_pool_backward,
+        net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
+        net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
+        net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
+        net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
+        net->workspace);
+
+    assemble_tile(net, net->batch, net->layers[l].c,
+                    tile_core_pool_indices, net->layers[l].indexes,
+                    net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
+                    net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
+                    left_extra_edges_pool_backward, right_extra_edges_pool_backward, top_extra_edges_pool_backward, bottom_extra_edges_pool_backward,
+                    device_id_x, device_id_y, NUM_TILES_X, NUM_TILES_Y);
+
+    pos_correct_maxpool_indices(tile_core_pool_indices, net->layers[l].stride,
+                                    net->layers[l].featuremap_in_w_with_boundry,
+                                    net->layers[l].delta_in_h_with_boundry, net->layers[l].delta_in_w_with_boundry, net->layers[l].c, net->batch);
+    
+    memcpy(net->layers[l].indexes, tile_core_pool_indices, net->batch*net->layers[l].delta_in_h_with_boundry*net->layers[l].delta_in_w_with_boundry*net->layers[l].c*sizeof(float));
+    free(tile_core_pool_indices);    
+}
+
+void remove_extra_boundary_data(network* net, int l){
+    int left_edges_extra = (net->layers[l].left_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].left_boundry_edges_delta;
+    int top_edges_extra = (net->layers[l].top_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].top_boundry_edges_delta;
+    int right_edges_extra = (net->layers[l].right_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].right_boundry_edges_delta;
+    int bottom_edges_extra = (net->layers[l].bottom_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].bottom_boundry_edges_delta;
+
+    copy_slice(net->layers[l-1].delta, net->layers[l-1].delta, net->batch, net->layers[l].c,
+        net->layers[l-1].delta_in_h_with_boundry + top_edges_extra + bottom_edges_extra,
+        net->layers[l-1].delta_in_w_with_boundry + left_edges_extra + right_edges_extra,
+        net->layers[l-1].delta_in_h_with_boundry,
+        net->layers[l-1].delta_in_w_with_boundry,
+        left_edges_extra, top_edges_extra, 0, 0,
+        net->layers[l-1].delta_in_h_with_boundry, net->layers[l-1].delta_in_w_with_boundry,
+        net->layers[l-1].delta_in_h_with_boundry, net->layers[l-1].delta_in_w_with_boundry,
+        net->workspace);    
 }
 
 void assemble_tile(network* net, int batch, int depth,
@@ -862,7 +931,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top_left, 
-            top_boundry_edges, left_boundry_edges, depth, BOTTOM_RIGHT, 
+            top_boundry_edges, left_boundry_edges, depth, batch,
+            BOTTOM_RIGHT, 
             device_id_x-1, device_id_y-1,
             device_id_x, device_id_y);
 
@@ -903,7 +973,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top, 
-            top_boundry_edges, core_tile_width, depth, BOTTOM, 
+            top_boundry_edges, core_tile_width, depth, batch,
+            BOTTOM, 
             device_id_x, device_id_y-1,
             device_id_x, device_id_y);
 
@@ -943,7 +1014,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top_right, 
-            top_boundry_edges, right_boundry_edges, depth, BOTTOM_LEFT, 
+            top_boundry_edges, right_boundry_edges, depth, batch,
+            BOTTOM_LEFT, 
             device_id_x+1, device_id_y-1,
             device_id_x, device_id_y);
 
@@ -981,7 +1053,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_left, 
-            core_tile_height, left_boundry_edges, depth, RIGHT, 
+            core_tile_height, left_boundry_edges, depth, batch,
+            RIGHT, 
             device_id_x-1, device_id_y,
             device_id_x, device_id_y);
 
@@ -1036,7 +1109,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_right, 
-            core_tile_height, right_boundry_edges, depth, LEFT, 
+            core_tile_height, right_boundry_edges, depth, batch,
+            LEFT, 
             device_id_x+1, device_id_y,
             device_id_x, device_id_y);
 
@@ -1074,7 +1148,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom_left, 
-            bottom_boundry_edges, left_boundry_edges, depth, TOP_RIGHT, 
+            bottom_boundry_edges, left_boundry_edges, depth, batch,
+            TOP_RIGHT, 
             device_id_x-1, device_id_y+1,
             device_id_x, device_id_y);
 
@@ -1112,7 +1187,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom, 
-            bottom_boundry_edges, core_tile_width, depth, TOP, 
+            bottom_boundry_edges, core_tile_width, depth, batch,
+            TOP, 
             device_id_x, device_id_y+1,
             device_id_x, device_id_y);
 
@@ -1151,7 +1227,8 @@ void assemble_tile(network* net, int batch, int depth,
         get_backward_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom_right, 
-            bottom_boundry_edges, right_boundry_edges, depth, TOP_LEFT, 
+            bottom_boundry_edges, right_boundry_edges, depth, batch,
+            TOP_LEFT, 
             device_id_x+1, device_id_y+1,
             device_id_x, device_id_y);
 

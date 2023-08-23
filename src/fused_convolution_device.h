@@ -41,7 +41,7 @@ void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
 void receive_sum_transmit_device_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
 void devices_send_partial_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X);
 
-void pos_correct_maxpool_indices(float* data, int stride,
+void pos_correct_maxpool_indices(int* data, int stride,
                                 int width_pool_in_forward,
                                 int width_pool_out_backward, int height_pool_out_backward, int depth_pool_out_backward, int batch);
 
@@ -57,5 +57,8 @@ void assemble_tile(network* net, int batch, int depth,
                    int core_tile_height, int core_tile_width,
                    int left_boundry_edges, int right_boundry_edges, int top_boundry_edges, int bottom_boundry_edges,
                    int device_id_x, int device_id_y, int NUM_TILES_X, int NUM_TILES_Y);
+
+void assemble_pool_indices(network* net, int l, int device_id_x, int device_id_y, int NUM_TILES_X, int NUM_TILES_Y);
+void remove_extra_boundary_data(network* net, int l);
 
 #endif

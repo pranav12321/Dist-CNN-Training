@@ -169,18 +169,6 @@ int main_device(int argc, char* argv[]){
 
     printf("Inference complete\n");
 
-    for(int b = 0; b < (net->layers[net->n - 1].batch); b++){
-        int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
-        printf("batch %d\n", b);
-        for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
-            for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
-                printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
-            }
-            printf("\n");
-        }
-        printf("\n\n");
-    }
-
     update_args a;
     a.batch = net->batch;
     a.learning_rate = 0.001;
@@ -234,6 +222,10 @@ int main_device(int argc, char* argv[]){
                             0, 0,
                             featuremap_with_unit_boundry_height, featuremap_with_unit_boundry_width, featuremap_with_unit_boundry_height, featuremap_with_unit_boundry_width,
                             net->workspace);
+            if(net->layers[l].type == MAXPOOL){
+                 assemble_pool_indices(net, l, ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
+            }
+            
 
             net->input = net->layers[l-1].output;
             net->delta = net->layers[l-1].delta;
@@ -250,15 +242,17 @@ int main_device(int argc, char* argv[]){
 
             if(net->layers[l].type == CONVOLUTIONAL)
                 backward_convolutional_layer_dist_delta(net->layers[l], *net);
-            else if(net->layers[l].type == MAXPOOL)
+            else if(net->layers[l].type == MAXPOOL){
                 backward_maxpool_layer(net->layers[l], *net);
+                remove_extra_boundary_data(net, l);
+            }
 
             if(net->layers[l].type == CONVOLUTIONAL){
 
                 copy_slice(net->layers[l].delta, net->layers[l].delta, net->batch, net->layers[l].n,
                                 net->layers[l].delta_in_h_with_boundry, net->layers[l].delta_in_w_with_boundry,
                                 net->layers[l].delta_in_h_without_boundry, net->layers[l].delta_in_w_without_boundry,
-                                net->layers[l].left_boundry_edges_featuremap, net->layers[l].top_boundry_edges_featuremap,
+                                net->layers[l].left_boundry_edges_delta, net->layers[l].top_boundry_edges_delta,
                                 0, 0,
                                 net->layers[l].delta_in_h_without_boundry, net->layers[l].delta_in_w_without_boundry,
                                 net->layers[l].delta_in_h_without_boundry, net->layers[l].delta_in_w_without_boundry,
