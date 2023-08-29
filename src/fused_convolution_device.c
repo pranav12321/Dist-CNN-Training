@@ -385,235 +385,6 @@ void zero_out_spurious_edges_delta(network* net, int layer_idx){
     }
 }
 
-void receive_sum_broadcast_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
-
-    int total_weights = 0;
-
-    for (int l = 0; l < net->n; ++l){
-        int num_filters = net->layers[l].n;
-        int filter_size = net->layers[l].size;
-        int channels = net->layers[l].c;
-        total_weights += num_filters*channels*filter_size*filter_size;
-    }    
-
-    float* data = calloc(total_weights, sizeof(float));
-    for (int i = 0; i < NUM_TILES_Y; ++i)
-    {
-        for (int j = 0; j < NUM_TILES_X; ++j){
-            if((i != 0) || (j != 0)){
-                receive_boundry(data, total_weights, j, i);
-                //printf("Weights from device %d %d\n", j, i);
-                int layer_cumulative_weights = 0;
-                for (int l = 0; l < net->n; ++l){
-
-                   // printf("Weights of layer %d\n", l);
-
-                    int num_filters = net->layers[l].n;
-                    int filter_size = net->layers[l].size;
-                    int channels = net->layers[l].c;
-
-                    for (int c = 0; c < channels; ++c)
-                    {
-                        for (int f = 0; f < num_filters; ++f)
-                        {                    
-                            for (int m = 0; m < filter_size; ++m)
-                            {
-                                for (int n = 0; n < filter_size; ++n)
-                                {
-                                    net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n] +=
-                                     data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)];
-
-                                     //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
-                                }
-                                //printf("\n");
-                            }
-
-                            //printf("\n");
-                        }
-
-                        //printf("\n\n");
-
-                    }
-                    //printf("\n\n\n");
-                    layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
-                }
-                //printf("\n\n\n\n");
-            }
-        }
-    }
-
-
-
-    for (int i = 0; i < NUM_TILES_Y; ++i)
-    {
-        for (int j = 0; j < NUM_TILES_X; ++j){
-            if((i != 0) || (j != 0)){
-
-                //printf("Weights for device %d %d\n", j, i);
-                int layer_cumulative_weights = 0;
-                for (int l = 0; l < net->n; ++l){
-
-                    //printf("Weights for layer %d\n", l);
-
-                    int num_filters = net->layers[l].n;
-                    int filter_size = net->layers[l].size;
-                    int channels = net->layers[l].c;
-
-                    for (int c = 0; c < channels; ++c)
-                    {
-                        for (int f = 0; f < num_filters; ++f)
-                        {                    
-                            for (int m = 0; m < filter_size; ++m)
-                            {
-                                for (int n = 0; n < filter_size; ++n)
-                                {
-                                    data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)] = 
-                                    net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n];
-
-                                    //printf("%.2f ", data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)]);
-                                }
-                                ///printf("\n");
-                            }
-                            //printf("\n");
-                        }
-                       // printf("\n\n");
-                    }
-                   // printf("\n\n\n");
-                    layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
-                }
-               // printf("\n\n\n\n");
-               send_boundry(data, total_weights, j, i);
-            }
-
-            
-        }
-    }
-
-    // for (int i = 0; i < NUM_TILES_Y; ++i)
-    // {
-    //     for (int j = 0; j < NUM_TILES_X; ++j){
-    //         if((i != 0) || (j != 0)){
-    //             for (int l = 0; l < net->n; ++l){
-    //                 for (int m = 0; m < net->layers[l].size; ++m)
-    //                 {
-    //                     for (int n = 0; n < net->layers[l].size; ++n)
-    //                     {
-    //                         data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)] = net->layers[l].weight_updates[m*net->layers[l].size + n];
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         send_boundry(data, net->n * net->layers[0].size * net->layers[0].size, j, i);
-    //     }
-    // }
-
-    free(data);
-
-
-}
-
-
-
-
-
-void sync_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
-
-    // float* data = malloc(net->n * net->layers[0].size * net->layers[0].size * sizeof(float));
-
-    // for (int l = 0; l < net->n; ++l){
-    //     for (int m = 0; m < net->layers[l].size; ++m)
-    //     {
-    //         for (int n = 0; n < net->layers[l].size; ++n)
-    //         {
-    //             data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)] = net->layers[l].weight_updates[m*net->layers[l].size + n];
-    //         }
-    //     }
-    // }
-
-    int total_weights = 0;
-
-    for (int l = 0; l < net->n; ++l){
-        int num_filters = net->layers[l].n;
-        int filter_size = net->layers[l].size;
-        int channels = net->layers[l].c;
-        total_weights += num_filters*channels*filter_size*filter_size;
-    }    
-
-    float* data = malloc(total_weights * sizeof(float));
-
-    int layer_cumulative_weights = 0;
-    for (int l = 0; l < net->n; ++l){
-
-        int num_filters = net->layers[l].n;
-        int filter_size = net->layers[l].size;
-        int channels = net->layers[l].c;
-
-        for (int c = 0; c < channels; ++c)
-        {
-            for (int f = 0; f < num_filters; ++f)
-            {                    
-                for (int m = 0; m < filter_size; ++m)
-                {
-                    for (int n = 0; n < filter_size; ++n)
-                    {
-                        data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)] = 
-                        net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n];
-                    }
-                }
-            }
-        }
-        layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
-    }
-
-    send_boundry(data, total_weights, 0, 0);
-
-    receive_boundry(data, total_weights, 0, 0);
-    // for (int l = 0; l < net->n; ++l){
-    //     for (int m = 0; m < net->layers[l].size; ++m)
-    //     {
-    //         for (int n = 0; n < net->layers[l].size; ++n)
-    //         {
-    //             net->layers[l].weight_updates[m*net->layers[l].size + n] = data[l*net->layers[l].size*net->layers[l].size + (m*net->layers[l].size + n)];
-    //         }
-    //     }
-    // }
-
-    layer_cumulative_weights = 0;
-
-    for (int l = 0; l < net->n; ++l){
-
-        int num_filters = net->layers[l].n;
-        int filter_size = net->layers[l].size;
-        int channels = net->layers[l].c;
-
-        for (int c = 0; c < channels; ++c)
-        {
-            for (int f = 0; f < num_filters; ++f)
-            {                    
-                for (int m = 0; m < filter_size; ++m)
-                {
-                    for (int n = 0; n < filter_size; ++n)
-                    {
-                        net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n] = 
-                        data[layer_cumulative_weights + ((c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n)];
-
-                    //    printf("%.2f ", net->layers[l].weight_updates[(c*num_filters*filter_size*filter_size) + (f*filter_size*filter_size) + m*filter_size + n]);
-                    }
-                  //  printf("\n");
-                }
-            }
-        }
-        layer_cumulative_weights += num_filters*channels*filter_size*filter_size;
-    }
-
-    free(data);
-
-
-}
-
-
-
 void receive_sum_transmit_device_weight_updates(network* net, int NUM_TILES_Y, int NUM_TILES_X){
 
     for (int i = 0; i < net->n; ++i)
@@ -848,6 +619,15 @@ void assemble_pool_indices(network* net, int l, int device_id_x, int device_id_y
                                          (net->layers[l].bottom_boundry_edges_featuremap / net->layers[l].stride);
     int top_extra_edges_pool_backward = net->layers[l].top_boundry_edges_delta - 
                                          (net->layers[l].top_boundry_edges_featuremap / net->layers[l].stride);
+
+    int left_extra_edges_pool_forward = (net->layers[l].left_boundry_edges_featuremap / net->layers[l].stride) -
+                                        net->layers[l].left_boundry_edges_delta;
+    int right_extra_edges_pool_forward = (net->layers[l].right_boundry_edges_featuremap / net->layers[l].stride) -
+                                        net->layers[l].right_boundry_edges_delta;
+    int bottom_extra_edges_pool_forward = (net->layers[l].bottom_boundry_edges_featuremap / net->layers[l].stride) -
+                                        net->layers[l].bottom_boundry_edges_delta;
+    int top_extra_edges_pool_forward = (net->layers[l].top_boundry_edges_featuremap / net->layers[l].stride) -
+                                        net->layers[l].top_boundry_edges_delta;
     
     printf("%d %d %d %d\n", left_extra_edges_pool_backward, right_extra_edges_pool_backward, bottom_extra_edges_pool_backward, top_extra_edges_pool_backward);
 
@@ -860,23 +640,34 @@ void assemble_pool_indices(network* net, int l, int device_id_x, int device_id_y
     if(bottom_extra_edges_pool_backward < 0)
         bottom_extra_edges_pool_backward = 0;
 
+    if(left_extra_edges_pool_forward < 0)
+        left_extra_edges_pool_forward = 0;
+    if(right_extra_edges_pool_forward < 0)
+        right_extra_edges_pool_forward = 0;
+    if(top_extra_edges_pool_forward < 0)
+        top_extra_edges_pool_forward = 0;
+    if(bottom_extra_edges_pool_forward < 0)
+        bottom_extra_edges_pool_forward = 0;
+
     copy_slice((float*) tile_core_pool_indices, net->layers[l].indexes, net->batch, net->layers[l].c,
         net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
         net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
         net->layers[l].delta_in_h_with_boundry, net->layers[l].delta_in_w_with_boundry,
-        0, 0, left_extra_edges_pool_backward, top_extra_edges_pool_backward,
-        net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
-        net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
-        net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
-        net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
+        left_extra_edges_pool_forward, top_extra_edges_pool_forward, left_extra_edges_pool_backward, top_extra_edges_pool_backward,
+        net->layers[l].delta_in_h_with_boundry - top_extra_edges_pool_backward - bottom_extra_edges_pool_backward,
+        net->layers[l].delta_in_w_with_boundry - left_extra_edges_pool_backward - right_extra_edges_pool_backward,
+        net->layers[l].delta_in_h_with_boundry - top_extra_edges_pool_backward - bottom_extra_edges_pool_backward,
+        net->layers[l].delta_in_w_with_boundry - left_extra_edges_pool_backward - right_extra_edges_pool_backward,
         net->workspace);
 
-    assemble_tile(net, net->batch, net->layers[l].c,
-                    tile_core_pool_indices, net->layers[l].indexes,
-                    net->layers[l].featuremap_in_h_with_boundry/net->layers[l].stride,
-                    net->layers[l].featuremap_in_w_with_boundry/net->layers[l].stride,
-                    left_extra_edges_pool_backward, right_extra_edges_pool_backward, top_extra_edges_pool_backward, bottom_extra_edges_pool_backward,
-                    device_id_x, device_id_y, NUM_TILES_X, NUM_TILES_Y);
+    if((left_extra_edges_pool_backward > 0) || (right_extra_edges_pool_backward > 0) || (top_extra_edges_pool_backward > 0) || (bottom_extra_edges_pool_backward > 0)){
+        assemble_tile(net, net->batch, net->layers[l].c,
+                        tile_core_pool_indices, net->layers[l].indexes,
+                        net->layers[l].delta_in_h_with_boundry - top_extra_edges_pool_backward - bottom_extra_edges_pool_backward,
+                        net->layers[l].delta_in_w_with_boundry - left_extra_edges_pool_backward - right_extra_edges_pool_backward,
+                        left_extra_edges_pool_backward, right_extra_edges_pool_backward, top_extra_edges_pool_backward, bottom_extra_edges_pool_backward,
+                        device_id_x, device_id_y, NUM_TILES_X, NUM_TILES_Y);
+    }
 
     pos_correct_maxpool_indices(tile_core_pool_indices, net->layers[l].stride,
                                     net->layers[l].featuremap_in_w_with_boundry,
@@ -892,6 +683,15 @@ void remove_extra_boundary_data(network* net, int l){
     int right_edges_extra = (net->layers[l].right_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].right_boundry_edges_delta;
     int bottom_edges_extra = (net->layers[l].bottom_boundry_edges_delta * net->layers[l].stride) - net->layers[l-1].bottom_boundry_edges_delta;
 
+    if(left_edges_extra < 0)
+        left_edges_extra = 0;
+    if(right_edges_extra < 0)
+        right_edges_extra = 0;    
+    if(top_edges_extra < 0)
+        top_edges_extra = 0;   
+    if(bottom_edges_extra < 0)
+        bottom_edges_extra = 0;
+      
     copy_slice(net->layers[l-1].delta, net->layers[l-1].delta, net->batch, net->layers[l].c,
         net->layers[l-1].delta_in_h_with_boundry + top_edges_extra + bottom_edges_extra,
         net->layers[l-1].delta_in_w_with_boundry + left_edges_extra + right_edges_extra,

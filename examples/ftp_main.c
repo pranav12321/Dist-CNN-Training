@@ -11,7 +11,7 @@
 
 #define LAYER_SIZE 608
 #define FILTER_SIZE 32
-#define BATCH_SIZE 2
+#define BATCH_SIZE 1
 
 int main_yolo(){
     //make_convolutional_layer(int batch, int h,
@@ -131,7 +131,7 @@ int main_yolo(){
     //     printf("\n\n");
     // }
 
-     for(int b = 0; b < (net->layers[14].batch); b++){
+     /*for(int b = 0; b < (net->layers[14].batch); b++){
          int sample_size = net->layers[14].out_h*net->layers[14].out_w;
          printf("batch %d\n", b);
          for(int i = 0; i < (net->layers[14].out_h); i++){
@@ -141,7 +141,7 @@ int main_yolo(){
              printf("\n");
          }
          printf("\n\n");
-     }
+     }*/
 
     update_args a;
     a.batch = net->batch;
@@ -161,18 +161,7 @@ int main_yolo(){
 
         // printf("Delta layer %d\n", l);
 
-        // for (int m = 0; m < net->layers[l].out_h; ++m)
-        // {
-        //     for (int n = 0; n < net->layers[l].out_w; ++n)
-        //     {
-        //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-        //     }
-        //     printf("\n");
-            
-        // }
-        // printf("\n");
-
-            if(l == 15){
+            if(l == 10){
                 for (int m = 0; m < net->layers[l].out_h ; ++m)
                 {
                         for (int n = 0; n < net->layers[l].out_w; ++n)
@@ -189,7 +178,7 @@ int main_yolo(){
 
 
 
-            if(l == 15){
+            /*if(l == 10){
                 for (int m = 0; m < net->layers[l-1].out_h ; ++m)
                 {
                         for (int n = 0; n < net->layers[l-1].out_w; ++n)
@@ -215,7 +204,7 @@ int main_yolo(){
             printf("\n");
 
 
-            }
+            }*/
 
 
     //     for (int m = 0; m < 12; ++m)
