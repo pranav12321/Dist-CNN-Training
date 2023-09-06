@@ -38,6 +38,8 @@ int main_device(int argc, char* argv[]){
     double inference_time = 0.0;
     double backprop_time = 0.0;
     double filter_partial_updates_time = 0.0;
+    double train_complete_wait_time = 0.0;
+    double actual_filter_sync_time = 0.0;
     double total_communication_time = 0.0;
 
     config_init(argc, argv);
@@ -308,16 +310,39 @@ int main_device(int argc, char* argv[]){
     gettimeofday(&step_time_before, NULL);
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
+
+        gettimeofday(&step_time_before, NULL);
         train_cycle_complete_sema_wait(current_device.num_tiles - 1);
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        train_complete_wait_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+
+        gettimeofday(&step_time_before, NULL);
         receive_sum_transmit_device_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        actual_filter_sync_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
     }
     else if(current_tile.is_device_representative_tile){
+        gettimeofday(&step_time_before, NULL);
         train_cycle_complete_sema_wait(current_device.num_tiles - 1);
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        train_complete_wait_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
+
+        gettimeofday(&step_time_before, NULL);
         devices_send_partial_weight_updates(net, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X);
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        actual_filter_sync_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
     }
     else{
+        gettimeofday(&step_time_before, NULL);
         train_cycle_complete_sema_post(1);
         filter_sync_complete_sema_wait(1);
+        gettimeofday(&step_time_after, NULL);
+        timersub(&step_time_after, &step_time_before, &step_time_result);
+        actual_filter_sync_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
     }
 
     gettimeofday(&step_time_after, NULL);
@@ -443,6 +468,8 @@ int main_device(int argc, char* argv[]){
             printf("I/O comm time = %.4f\n", input_output_comm_time);
             printf("Boundary Communication time = %.4f\n", boundary_communication_time);
             printf("Filter Update Time = %.4f\n", filter_partial_updates_time);
+            printf("\t Train complete wait time = %.4f\n", train_complete_wait_time);
+            printf("\t Actual filter sync time = %.4f\n", actual_filter_sync_time);
 
            FILE *fptr;
 
