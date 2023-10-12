@@ -42,6 +42,10 @@ int main_device(int argc, char* argv[]){
     double actual_filter_sync_time = 0.0;
     double total_communication_time = 0.0;
 
+#ifdef GPU
+    cudaError_t status;
+#endif
+
     config_init(argc, argv);
     forward_pass();
     backward_pass();
@@ -53,6 +57,10 @@ int main_device(int argc, char* argv[]){
 
     float* INPUT_IMAGE = calloc(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, sizeof(float));
     float* OUTPUT_DELTA = calloc(net->batch*net->layers[net->n - 1].outputs, sizeof(float));
+
+#ifdef GPU
+    float* INPUT_IMAGE_GPU = cuda_make_array(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c);
+#endif
 
     if(current_tile.is_device_representative_tile){
         init_complete_sema_wait(current_device.num_tiles - 1);
@@ -102,7 +110,7 @@ int main_device(int argc, char* argv[]){
                     net->layers[0].featuremap_in_w_with_boundry*
                     net->layers[0].c;
 
-    float* INPUT_BOUNDRY = calloc(net->inputs, sizeof(float));
+    float* NETWORK_INPUT_PTR;
 
     for (int g = 0; g < ftp_params.NUM_GROUPS_FORWARD; ++g)
     {
@@ -118,19 +126,36 @@ int main_device(int argc, char* argv[]){
                         net->layers[group_start_idx].c;
 
         net->input = calloc(net->inputs, sizeof(float));
-
         float* group_input = (group_start_idx == 0) ?  INPUT_IMAGE : net->layers[group_start_idx - 1].output;
 
+#ifdef GPU
+        status = cudaMalloc((void **)&net->input_gpu, net->inputs*sizeof(float));
+        check_error(status);
+        float* group_input_gpu = (group_start_idx == 0) ?  INPUT_IMAGE_GPU : net->layers[group_start_idx - 1].output_gpu;
+#endif
+
         //get boundry data here
+#ifdef GPU
+        assemble_tile_gpu(net, net->batch, net->layers[group_start_idx].c,
+                        net->input_gpu, group_input_gpu,
+                        net->layers[group_start_idx].featuremap_in_h_without_boundry, net->layers[group_start_idx].featuremap_in_w_without_boundry,
+                        net->layers[group_start_idx].left_boundry_edges_featuremap, net->layers[group_start_idx].right_boundry_edges_featuremap,
+                        net->layers[group_start_idx].top_boundry_edges_featuremap, net->layers[group_start_idx].bottom_boundry_edges_featuremap,
+                       ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
+        if(group_start_idx > 0){
+            status = cudaMemcpy(net->layers[group_start_idx - 1].output_gpu, net->input_gpu, net->inputs*sizeof(float), cudaMemcpyDeviceToDevice);
+            check_error(status);
+        }
+#else
         assemble_tile(net, net->batch, net->layers[group_start_idx].c,
                         net->input, group_input,
                         net->layers[group_start_idx].featuremap_in_h_without_boundry, net->layers[group_start_idx].featuremap_in_w_without_boundry,
                         net->layers[group_start_idx].left_boundry_edges_featuremap, net->layers[group_start_idx].right_boundry_edges_featuremap,
                         net->layers[group_start_idx].top_boundry_edges_featuremap, net->layers[group_start_idx].bottom_boundry_edges_featuremap,
                         ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
-
         if(group_start_idx > 0)
             memcpy(net->layers[group_start_idx - 1].output, net->input, net->inputs*sizeof(float));
+#endif
 
         gettimeofday(&step_time_after, NULL);
 
@@ -141,25 +166,38 @@ int main_device(int argc, char* argv[]){
 
         gettimeofday(&step_time_before, NULL);
 
-        if(g == 0){
-            memcpy(INPUT_BOUNDRY, net->input, net->inputs*sizeof(float));
-        }
+        if(g == 0)
+            NETWORK_INPUT_PTR = net->input;
 
         printf("Received input boundary. Starting inference\n");
 
         for (int l = group_start_idx; l <= group_end_idx; ++l)
         {
-            zero_out_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
-            zero_out_spurious_edges_featuremap(net, l);
-            net->index = l;
 
+#ifdef GPU
+            //clear_edges_featuremap_device_gpu(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            clear_spurious_edges_featuremap_gpu(net, l);
+            net->index = l;
+            net->layers[l].forward_gpu(net->layers[l], *net);
+
+            if((l == group_start_idx) && (l > 0)){
+                cuda_free(net->input_gpu);
+            }
+
+            net->input_gpu = net->layers[l].output_gpu;
+#else
+            clear_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            clear_spurious_edges_featuremap(net, l);
+
+            net->index = l;
             net->layers[l].forward(net->layers[l], *net);
 
-            if(l == group_start_idx){
+            if((l == group_start_idx) && (group_start_idx > 0)){
                 free(net->input);
             }
 
             net->input = net->layers[l].output;
+#endif
         }
 
         gettimeofday(&step_time_after, NULL);
@@ -186,13 +224,22 @@ int main_device(int argc, char* argv[]){
         int group_end_idx = ftp_params.sync_group_vector_backward[g];
 
         int depth = (net->layers[group_end_idx].type == CONVOLUTIONAL) ? (net->layers[group_end_idx].n) : (net->layers[group_end_idx].c);
-        
+
+#ifdef GPU
+        assemble_tile_gpu(net, net->batch, depth,
+                        net->layers[group_end_idx].delta_gpu, net->layers[group_end_idx].delta_gpu,
+                        net->layers[group_end_idx].delta_in_h_without_boundry, net->layers[group_end_idx].delta_in_w_without_boundry,
+                        net->layers[group_end_idx].left_boundry_edges_delta, net->layers[group_end_idx].right_boundry_edges_delta,
+                        net->layers[group_end_idx].top_boundry_edges_delta, net->layers[group_end_idx].bottom_boundry_edges_delta,
+                        ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
+#else        
         assemble_tile(net, net->batch, depth,
                         net->layers[group_end_idx].delta, net->layers[group_end_idx].delta,
                         net->layers[group_end_idx].delta_in_h_without_boundry, net->layers[group_end_idx].delta_in_w_without_boundry,
                         net->layers[group_end_idx].left_boundry_edges_delta, net->layers[group_end_idx].right_boundry_edges_delta,
                         net->layers[group_end_idx].top_boundry_edges_delta, net->layers[group_end_idx].bottom_boundry_edges_delta,
                         ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
+#endif
 
         gettimeofday(&step_time_after, NULL);
         timersub(&step_time_after, &step_time_before, &step_time_result);
@@ -209,7 +256,7 @@ int main_device(int argc, char* argv[]){
             gettimeofday(&step_time_before, NULL);
 
             if(net->layers[l].type == MAXPOOL){
-                 assemble_pool_indices(net, l, ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
+                assemble_pool_indices(net, l, ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
             }
 
             gettimeofday(&step_time_after, NULL);
@@ -237,7 +284,7 @@ int main_device(int argc, char* argv[]){
                             0, 0,
                             featuremap_with_unit_boundry_height, featuremap_with_unit_boundry_width, featuremap_with_unit_boundry_height, featuremap_with_unit_boundry_width,
                             net->workspace);
-
+            
             net->input = net->layers[l-1].output;
             net->delta = net->layers[l-1].delta;
 
@@ -248,8 +295,8 @@ int main_device(int argc, char* argv[]){
 
             net->layers[l].pad = net->layers[l].size - 1;
 
-            zero_out_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
-            zero_out_spurious_edges_delta(net, l);
+            clear_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            clear_spurious_edges_delta(net, l);
 
             if(net->layers[l].type == CONVOLUTIONAL)
                 backward_convolutional_layer_dist_delta(net->layers[l], *net);
@@ -295,7 +342,7 @@ int main_device(int argc, char* argv[]){
 
     gettimeofday(&step_time_before, NULL);    
 
-    backprop_layer0(net, INPUT_BOUNDRY);
+    backprop_layer0(net, NETWORK_INPUT_PTR);
 
     free(OUTPUT_DELTA);
 
@@ -637,7 +684,7 @@ int main_inference(int argc, char* argv[]){
                     net->layers[0].featuremap_in_w_with_boundry*
                     net->layers[0].c;
 
-    float* INPUT_BOUNDRY = calloc(net->inputs, sizeof(float));
+    float* NETWORK_INPUT_PTR;
 
     for (int g = 0; g < ftp_params.NUM_GROUPS_FORWARD; ++g)
     {
@@ -671,15 +718,15 @@ int main_inference(int argc, char* argv[]){
         gettimeofday(&step_time_before, NULL);
 
         if(g == 0){
-            memcpy(INPUT_BOUNDRY, net->input, net->inputs*sizeof(float));
+            NETWORK_INPUT_PTR = net->input;
         }
 
         printf("Received input boundary. Starting inference\n");
 
         for (int l = group_start_idx; l <= group_end_idx; ++l)
         {
-            zero_out_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
-            zero_out_spurious_edges_featuremap(net, l);
+            clear_edges_featuremap_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            clear_spurious_edges_featuremap(net, l);
             net->index = l;
 
             if(net->layers[l].type == CONVOLUTIONAL){
@@ -860,8 +907,8 @@ int main_backprop(int argc, char* argv[]){
 
             net->layers[l].pad = net->layers[l].size - 1;
 
-            zero_out_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
-            zero_out_spurious_edges_delta(net, l);
+            clear_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
+            clear_spurious_edges_delta(net, l);
 
             if(net->layers[l].type == CONVOLUTIONAL)
                 backward_convolutional_layer_dist_delta(net->layers[l], *net);

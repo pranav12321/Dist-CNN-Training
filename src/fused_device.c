@@ -93,13 +93,13 @@ void config_init(int argc, char* argv[]){
         network_params_tile.delta_dim_with_boundry_vector[i].depth = network_params_tile.featuremap_dim_with_boundry_vector[i+1].depth;
     }
 
-    ftp_params.NUM_GROUPS_FORWARD = 1;//num_layers;
+    ftp_params.NUM_GROUPS_FORWARD = num_layers;
 
     ftp_params.sync_group_vector_forward[0] = 0;
-    ftp_params.sync_group_vector_forward[1] = 8;
-    ftp_params.sync_group_vector_forward[2] = 10;
-    ftp_params.sync_group_vector_forward[3] = 12;
-    ftp_params.sync_group_vector_forward[4] = 14;
+    ftp_params.sync_group_vector_forward[1] = 1;
+    ftp_params.sync_group_vector_forward[2] = 2;
+    ftp_params.sync_group_vector_forward[3] = 3;
+    ftp_params.sync_group_vector_forward[4] = 4;
     ftp_params.sync_group_vector_forward[5] = 5;
     ftp_params.sync_group_vector_forward[6] = 6;
     ftp_params.sync_group_vector_forward[7] = 7;
@@ -219,7 +219,12 @@ void init_network(network** net_inp){
         }
     }
     printf("wsize = %d inputs = %d outputs = %d\n", max*sizeof(float), net->inputs, net->layers[0].outputs);
-    net->workspace = calloc(max, sizeof(float));
+    
+    #ifdef GPU
+        net->workspace = cuda_make_array(0, (max-1)/sizeof(float)+1);
+    #else
+        net->workspace = calloc(max, sizeof(float));
+    #endif
 
     printf("%p\n", net);
 }

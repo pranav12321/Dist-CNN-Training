@@ -193,8 +193,6 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.batch_normalize = batch_normalize;
 
     l.weights = calloc(c/groups*n*size*size, sizeof(float));
-    //l.weights = calloc(c/groups*n*size*size, sizeof(float));
-    printf("weight size %d\n", c/groups*n*size*size);
     l.weight_updates = calloc(c/groups*n*size*size, sizeof(float));
 
     l.biases = calloc(n, sizeof(float));
@@ -219,17 +217,7 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.inputs = l.w * l.h * l.c;
 
     l.output = calloc(l.batch*l.outputs*5, sizeof(float));
-    //l.output_without_boundry = calloc(l.batch*l.outputs*2, sizeof(float));
-    l.delta  = calloc(l.batch*l.outputs*10, sizeof(float));
-   // l.delta_with_boundry  = calloc(l.batch*l.outputs*5, sizeof(float)); //TODO: Calculate this exact size
-   // l.delta_without_boundry  = calloc(l.batch*l.outputs*2, sizeof(float));
-    // l.delta_ftp_top_receive = calloc(l.batch*l.outputs*10, sizeof(float));
-    // l.delta_ftp_left_receive = calloc(l.batch*l.outputs*10, sizeof(float));
-    // l.delta_ftp_top_left_receive  = calloc(l.batch*l.outputs*10, sizeof(float));
-   // l.delta_ftp_bottom_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
-    //l.delta_ftp_bottom_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
-    // l.delta_ftp_right_transmit  = calloc(l.batch*l.outputs*10, sizeof(float));
-
+    l.delta  = calloc(l.batch*l.outputs*5, sizeof(float));
 
     l.forward = forward_convolutional_layer;
     l.backward = backward_convolutional_layer;
@@ -292,8 +280,8 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
         l.biases_gpu = cuda_make_array(l.biases, n);
         l.bias_updates_gpu = cuda_make_array(l.bias_updates, n);
 
-        l.delta_gpu = cuda_make_array(l.delta, l.batch*out_h*out_w*n);
-        l.output_gpu = cuda_make_array(l.output, l.batch*out_h*out_w*n);
+        l.delta_gpu = cuda_make_array(l.delta, l.batch*out_h*out_w*n*5);
+        l.output_gpu = cuda_make_array(l.output, l.batch*out_h*out_w*n*5);
 
         if(binary){
             l.binary_weights_gpu = cuda_make_array(l.weights, l.nweights);

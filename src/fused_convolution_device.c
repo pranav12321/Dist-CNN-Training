@@ -1,6 +1,7 @@
 #include "fused_convolution_device.h"
 #include "fused_device.h"
 #include "transport.h"
+#include "ftp.h"
 
 extern int NUM_TILES_X;
 extern int NUM_TILES_Y;
@@ -17,51 +18,7 @@ extern ftp_network ftp_cluster;
 
 int cumulative = 0;
 
-void get_forward_group_boundry_data_device(
-    int NUM_TILES_X, int NUM_TILES_Y,
-    float** device_data, 
-    int rows, int cols, int depth, int batch,
-    orientation region,
-    int device_src_id_x, int device_src_id_y, 
-    int device_dst_id_x, int device_dst_id_y){
-
-    float* boundry_data = calloc(rows*cols*depth*batch, sizeof(float));
-    *device_data = boundry_data;
-    //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
-
-    int x_dim;
-    int y_dim; 
-
-    float* boundry_src_data;
-
-    if((device_src_id_x >= NUM_TILES_X) && 
-        (region == BOTTOM_LEFT || region == LEFT || region == TOP_LEFT)){
-        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
-        return;
-    }
-    if((device_src_id_x < 0) && 
-        (region == TOP_RIGHT || region == RIGHT || region == BOTTOM_RIGHT)){
-        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
-        return;
-    }
-    if((device_src_id_y >= NUM_TILES_Y) && 
-        (region == TOP_LEFT || region == TOP || region == TOP_RIGHT)){
-        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
-        return;
-    }
-    if((device_src_id_y < 0) && 
-        (region == BOTTOM_LEFT || region == BOTTOM || region == BOTTOM_RIGHT)){
-        fill_cpu(depth*rows*cols*batch, 0, *device_data, 1);
-        return;
-    }
-    printf("To receive: %d\n", rows*cols*depth*batch);
-
-    receive_boundry(boundry_data, batch*depth*rows*cols, device_src_id_x, device_src_id_y);
-
-}
-
-
-void get_backward_group_boundry_data_device(
+static void get_group_boundry_data_device(
     int NUM_TILES_X, int NUM_TILES_Y,
     float** device_data, 
     int rows, int cols, int depth, int batch,
@@ -103,7 +60,7 @@ void get_backward_group_boundry_data_device(
 
 }
 
-void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
+void clear_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
 
     int x_dim = net->layers[layer_idx].featuremap_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].featuremap_in_h_with_boundry;
@@ -183,7 +140,8 @@ void zero_out_edges_featuremap_device(network* net, int layer_idx, int NUM_TILES
 }
 
 
-void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
+
+void clear_spurious_edges_featuremap(network* net, int layer_idx){
 
     int x_dim = net->layers[layer_idx].featuremap_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].featuremap_in_h_with_boundry;
@@ -249,7 +207,7 @@ void zero_out_spurious_edges_featuremap(network* net, int layer_idx){
 }
 
 
-void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
+void clear_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, int NUM_TILES_X, int device_id_y, int device_id_x){
 
     int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
@@ -327,7 +285,7 @@ void zero_out_edges_delta_device(network* net, int layer_idx, int NUM_TILES_Y, i
 }
 
 
-void zero_out_spurious_edges_delta(network* net, int layer_idx){
+void clear_spurious_edges_delta(network* net, int layer_idx){
 
     int x_dim = net->layers[layer_idx].delta_in_w_with_boundry;
     int y_dim = net->layers[layer_idx].delta_in_h_with_boundry;
@@ -728,7 +686,7 @@ void assemble_tile(network* net, int batch, int depth,
 
         float* boundry_top_left;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top_left, 
             top_boundry_edges, left_boundry_edges, depth, batch,
@@ -770,7 +728,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive top edges
         float* boundry_top;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top, 
             top_boundry_edges, core_tile_width, depth, batch,
@@ -811,7 +769,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive top-right edges
         float* boundry_top_right;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_top_right, 
             top_boundry_edges, right_boundry_edges, depth, batch,
@@ -850,7 +808,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive Left edges
         float* boundry_left;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_left, 
             core_tile_height, left_boundry_edges, depth, batch,
@@ -906,7 +864,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive Right edges
         float* boundry_right;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_right, 
             core_tile_height, right_boundry_edges, depth, batch,
@@ -945,7 +903,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive Bottom-Left edges
         float* boundry_bottom_left;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom_left, 
             bottom_boundry_edges, left_boundry_edges, depth, batch,
@@ -984,7 +942,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive Bottom
         float* boundry_bottom;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom, 
             bottom_boundry_edges, core_tile_width, depth, batch,
@@ -1024,7 +982,7 @@ void assemble_tile(network* net, int batch, int depth,
         //receive Bottom-Right
         float* boundry_bottom_right;
 
-        get_backward_group_boundry_data_device(
+        get_group_boundry_data_device(
             NUM_TILES_X, NUM_TILES_Y,
             &boundry_bottom_right, 
             bottom_boundry_edges, right_boundry_edges, depth, batch,
@@ -1045,32 +1003,430 @@ void assemble_tile(network* net, int batch, int depth,
 
 }
 
+#ifdef GPU 
+
+void assemble_tile_gpu(network* net, int batch, int depth,
+                   float* target, float* core_tile_data,
+                   int core_tile_height, int core_tile_width,
+                   int left_boundry_edges, int right_boundry_edges, int top_boundry_edges, int bottom_boundry_edges,
+                   int device_id_x, int device_id_y, int NUM_TILES_X, int NUM_TILES_Y){
+
+    int full_height = core_tile_height + top_boundry_edges + bottom_boundry_edges;
+    int full_width = core_tile_width + left_boundry_edges + right_boundry_edges;
+
+    float* core_tile_temp;
+    cudaError_t status = cudaMalloc((void **)&core_tile_temp, batch*depth*core_tile_height*core_tile_width*sizeof(float));
+    check_error(status);
+    status = cudaMemcpy(core_tile_temp, core_tile_data, batch*depth*core_tile_height*core_tile_width*sizeof(float), cudaMemcpyDeviceToDevice);
+    check_error(status);
+
+    copy_slice_gpu(target, core_tile_data, batch, depth,
+        core_tile_height, core_tile_width, full_height, full_width,
+        0, 0, left_boundry_edges, top_boundry_edges,
+        core_tile_height, core_tile_width, core_tile_height, core_tile_width,
+        net->workspace);
+
+    float* transmit_data;
+    float* transmit_data_gpu;
+
+    // //Top left
+    if((top_boundry_edges > 0) && (left_boundry_edges > 0)){
+
+        float* boundry_top_left;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_top_left, 
+            top_boundry_edges, left_boundry_edges, depth, batch,
+            BOTTOM_RIGHT, 
+            device_id_x-1, device_id_y-1,
+            device_id_x, device_id_y);
+
+        float * boundry_top_left_gpu = cuda_make_array(boundry_top_left, top_boundry_edges*left_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_top_left_gpu, batch, depth,
+            top_boundry_edges, left_boundry_edges, full_height, full_width,
+            0, 0, 0, 0,
+            top_boundry_edges, left_boundry_edges, top_boundry_edges, left_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_top_left_gpu);
+        free(boundry_top_left);
+
+        //SEND TOP LEFT
+        if((device_id_y > 0) && (device_id_x > 0)){
+            int rows = bottom_boundry_edges;
+            int cols = right_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                0, 0, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+    
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x-1, device_id_y-1);
+                
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+
+        }
+    }
+
+    //Top
+    if(top_boundry_edges > 0){
+        //receive top edges
+        float* boundry_top;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_top, 
+            top_boundry_edges, core_tile_width, depth, batch,
+            BOTTOM, 
+            device_id_x, device_id_y-1,
+            device_id_x, device_id_y);
+
+        float * boundry_top_gpu = cuda_make_array(boundry_top, top_boundry_edges*core_tile_width*depth*batch);
+
+        copy_slice_gpu(target, boundry_top_gpu, batch, depth,
+            top_boundry_edges, core_tile_width, full_height, full_width,
+            0, 0, left_boundry_edges, 0,
+            top_boundry_edges, core_tile_width, top_boundry_edges, core_tile_width,
+            net->workspace);
+
+        cuda_free(boundry_top_gpu);
+        free(boundry_top);
+
+        //SEND TOP
+        if(device_id_y > 0){
+            int rows = bottom_boundry_edges;
+            int cols = core_tile_width;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                0, 0, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x, device_id_y-1);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+    } 
+
+
+    //Top Right
+    if(top_boundry_edges > 0 && right_boundry_edges > 0){
+        //receive top-right edges
+        float* boundry_top_right;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_top_right, 
+            top_boundry_edges, right_boundry_edges, depth, batch,
+            BOTTOM_LEFT, 
+            device_id_x+1, device_id_y-1,
+            device_id_x, device_id_y);
+        
+        float * boundry_top_right_gpu = cuda_make_array(boundry_top_right, top_boundry_edges*right_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_top_right_gpu, batch, depth,
+            top_boundry_edges, right_boundry_edges, full_height, full_width,
+            0, 0, left_boundry_edges + core_tile_width, 0,
+            top_boundry_edges, right_boundry_edges, top_boundry_edges, right_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_top_right_gpu);
+        free(boundry_top_right);
+
+        //SEND TOP-RIGHT
+        if((device_id_y > 0) && (device_id_x < (NUM_TILES_X-1))){
+            int rows = bottom_boundry_edges;
+            int cols = left_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                core_tile_width - right_boundry_edges, 0, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x+1, device_id_y-1);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+    }
+
+    //LEFT
+    if(left_boundry_edges > 0){
+        //receive Left edges
+        float* boundry_left;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_left, 
+            core_tile_height, left_boundry_edges, depth, batch,
+            RIGHT, 
+            device_id_x-1, device_id_y,
+            device_id_x, device_id_y);
+        
+        float * boundry_left_gpu = cuda_make_array(boundry_left, core_tile_height*left_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_left_gpu, batch, depth,
+            core_tile_height, left_boundry_edges, full_height, full_width,
+            0, 0, 0, top_boundry_edges,
+            core_tile_height, left_boundry_edges, core_tile_height, left_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_left_gpu);
+        free(boundry_left);
+
+        //SEND Left
+        if(device_id_x > 0){
+            int rows = core_tile_height;
+            int cols = right_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                0, 0, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x - 1, device_id_y);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+    }  
+
+    //RIGHT
+    if(right_boundry_edges > 0){
+        //SEND Right
+        if(device_id_x < (NUM_TILES_X-1)){
+            int rows = core_tile_height;
+            int cols = left_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                core_tile_width - right_boundry_edges, 0, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x+1, device_id_y);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+
+        //receive Right edges
+        float* boundry_right;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_right, 
+            core_tile_height, right_boundry_edges, depth, batch,
+            LEFT, 
+            device_id_x+1, device_id_y,
+            device_id_x, device_id_y);
+        
+        float * boundry_right_gpu = cuda_make_array(boundry_right, core_tile_height*right_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_right_gpu, batch, depth,
+            core_tile_height, right_boundry_edges, full_height, full_width,
+            0, 0, left_boundry_edges + core_tile_width, top_boundry_edges,
+            core_tile_height, right_boundry_edges, core_tile_height, right_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_right_gpu);
+        free(boundry_right);
+    }
+
+    //BOTTOM LEFT
+    if((bottom_boundry_edges > 0) && (left_boundry_edges > 0)){
+        //SEND Bottom-Left
+        if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x > 0)){
+            int rows = top_boundry_edges;
+            int cols = right_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                0, core_tile_height - top_boundry_edges, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x-1, device_id_y+1);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+
+        //receive Bottom-Left edges
+        float* boundry_bottom_left;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_bottom_left, 
+            bottom_boundry_edges, left_boundry_edges, depth, batch,
+            TOP_RIGHT, 
+            device_id_x-1, device_id_y+1,
+            device_id_x, device_id_y);
+
+        float * boundry_bottom_left_gpu = cuda_make_array(boundry_bottom_left, bottom_boundry_edges*left_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_bottom_left_gpu, batch, depth,
+            bottom_boundry_edges, left_boundry_edges, full_height, full_width,
+            0, 0, 0, top_boundry_edges + core_tile_height,
+            bottom_boundry_edges, left_boundry_edges, bottom_boundry_edges, left_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_bottom_left_gpu);
+        free(boundry_bottom_left);
+    }
+
+    //BOTTOM
+    if(bottom_boundry_edges > 0){
+        //SEND Bottom
+        if(device_id_y < (NUM_TILES_Y-1)){
+            int rows = top_boundry_edges;
+            int cols = core_tile_width;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                0, core_tile_height - top_boundry_edges, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x, device_id_y+1);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+
+        //receive Bottom
+        float* boundry_bottom;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_bottom, 
+            bottom_boundry_edges, core_tile_width, depth, batch,
+            TOP, 
+            device_id_x, device_id_y+1,
+            device_id_x, device_id_y);
+        
+        float * boundry_bottom_gpu = cuda_make_array(boundry_bottom, bottom_boundry_edges*core_tile_width*depth*batch);
+
+        copy_slice_gpu(target, boundry_bottom_gpu, batch, depth,
+            bottom_boundry_edges, core_tile_width, full_height, full_width,
+            0, 0, left_boundry_edges, top_boundry_edges + core_tile_height,
+            bottom_boundry_edges, core_tile_width, bottom_boundry_edges, core_tile_width,
+            net->workspace);
+
+        cuda_free(boundry_bottom_gpu);
+        free(boundry_bottom);
+    }
+
+
+    //BOTTOM RIGHT
+    if(bottom_boundry_edges > 0 && right_boundry_edges > 0){
+        //SEND Bottom-Right
+        if((device_id_y < (NUM_TILES_Y-1)) && (device_id_x < (NUM_TILES_X-1))){
+            int rows = top_boundry_edges;
+            int cols = left_boundry_edges;
+            transmit_data = calloc((batch*depth*rows*cols), sizeof(float));
+            status = cudaMalloc((void **)&transmit_data_gpu, batch*depth*rows*cols*sizeof(float));
+
+            copy_slice_gpu(transmit_data_gpu, core_tile_temp, batch, depth,
+                core_tile_height, core_tile_width, rows, cols,
+                core_tile_width - left_boundry_edges, core_tile_height - top_boundry_edges, 0, 0,
+                rows, cols, rows, cols,
+                net->workspace);
+            
+            cuda_pull_array(transmit_data_gpu, transmit_data, batch*depth*rows*cols);
+            send_boundry(transmit_data, batch*depth*rows*cols, device_id_x+1, device_id_y+1);
+            
+            free(transmit_data);
+            cuda_free(transmit_data_gpu);
+        }
+
+        //receive Bottom-Right
+        float* boundry_bottom_right;
+
+        get_group_boundry_data_device(
+            NUM_TILES_X, NUM_TILES_Y,
+            &boundry_bottom_right, 
+            bottom_boundry_edges, right_boundry_edges, depth, batch,
+            TOP_LEFT, 
+            device_id_x+1, device_id_y+1,
+            device_id_x, device_id_y);
+
+        float * boundry_bottom_right_gpu = cuda_make_array(boundry_bottom_right, bottom_boundry_edges*right_boundry_edges*depth*batch);
+
+        copy_slice_gpu(target, boundry_bottom_right_gpu, batch, depth,
+            bottom_boundry_edges, right_boundry_edges, full_height, full_width,
+            0, 0, left_boundry_edges + core_tile_width, top_boundry_edges + core_tile_height,
+            bottom_boundry_edges, right_boundry_edges, bottom_boundry_edges, right_boundry_edges,
+            net->workspace);
+
+        cuda_free(boundry_bottom_right_gpu);
+        free(boundry_bottom_right);
+    }
+
+}
+
+#endif
+
 void copy_slice(float* dst, float* src, int batch, int depth,
                 int height_src, int width_src, int height_dst, int width_dst,
                 int src_start_x, int src_start_y, int dst_start_x, int dst_start_y,
                 int copy_height_src, int copy_width_src, int copy_height_dst, int copy_width_dst,
                 float* workspace){
 
-    for(int b = 0; b < batch; b++){
-        for(int d = 0; d < depth; d++){
-            for(int h = 0; h < copy_height_src; h++){
-                for(int w = 0; w < copy_width_src; w++){
-                    workspace[b*depth*copy_height_src*copy_width_src + d*copy_height_src*copy_width_src + h*copy_width_src + w] = 
-                    src[b*depth*height_src*width_src + d*height_src*width_src + (h + src_start_y)*width_src + w + src_start_x];
-                }   
-            }       
-        }        
-    }
+    float* src_intermediate = src;
+
+    //if(dst == src){
+      //  src_intermediate = workspace;
+    
+        for(int b = 0; b < batch; b++){
+            for(int d = 0; d < depth; d++){
+                for(int h = 0; h < copy_height_src; h++){
+                    for(int w = 0; w < copy_width_src; w++){
+                        workspace[b*depth*copy_height_src*copy_width_src + d*copy_height_src*copy_width_src + h*copy_width_src + w] = 
+                        src[b*depth*height_src*width_src + d*height_src*width_src + (h + src_start_y)*width_src + w + src_start_x];
+                    }   
+                }       
+            }        
+        }
+    //}
 
     for(int b = 0; b < batch; b++){
         for(int d = 0; d < depth; d++){
             for(int h = 0; h < copy_height_dst; h++){
                 for(int w = 0; w < copy_width_dst; w++){
-                    dst[b*depth*height_dst*width_dst + d*height_dst*width_dst + (h + dst_start_y)*width_dst + w + dst_start_x] = 
+                    dst[b*depth*height_dst*width_dst + d*height_dst*width_dst + (h + dst_start_y)*width_dst + w + dst_start_x] =
                     workspace[b*depth*copy_height_dst*copy_width_dst + d*copy_height_dst*copy_width_dst + h*copy_width_dst + w];
                 }   
             }       
         }        
     }
 }
-void update_slice(float* dst, float* src, int batch, int depth, int height, int width);
