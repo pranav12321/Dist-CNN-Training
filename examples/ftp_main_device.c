@@ -232,7 +232,32 @@ int main_device(int argc, char* argv[]){
                         net->layers[group_end_idx].left_boundry_edges_delta, net->layers[group_end_idx].right_boundry_edges_delta,
                         net->layers[group_end_idx].top_boundry_edges_delta, net->layers[group_end_idx].bottom_boundry_edges_delta,
                         ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y);
-#else        
+#else      
+
+        if(net->layers[group_end_idx].type == CONVOLUTIONAL){
+            int l = group_end_idx;
+
+            int out_h_orig = (l == (net->n - 1)) ? net->layers[l].out_h : (net->layers[l+1].featuremap_in_h_without_boundry + 2*(net->layers[l+1].size/2));
+            int out_w_orig = (l == (net->n - 1)) ? net->layers[l].out_w : (net->layers[l+1].featuremap_in_w_without_boundry + 2*(net->layers[l+1].size/2));
+
+            int out_h_nob = (l == (net->n - 1)) ? net->layers[l].out_h : net->layers[l+1].featuremap_in_h_without_boundry;
+            int out_w_nob = (l == (net->n - 1)) ? net->layers[l].out_w : net->layers[l+1].featuremap_in_w_without_boundry;
+
+            int left_offset = (l == (net->n - 1)) ? 0 : net->layers[l+1].size/2;
+            int top_offset = (l == (net->n - 1)) ? 0 : net->layers[l+1].size/2;
+
+            float* temp_output = calloc(out_h_nob*out_w_nob*net->batch*net->layers[l].n, sizeof(float));
+            copy_slice(temp_output, net->layers[l].output, net->batch, net->layers[l].n,
+                            out_h_orig, out_w_orig,
+                            out_h_nob, out_w_nob,
+                            left_offset, top_offset,
+                            0, 0,
+                            out_h_nob, out_w_nob, out_h_nob, out_w_nob,
+                            net->workspace);
+            gradient_array(temp_output, out_h_nob*out_w_nob*net->batch*net->layers[l].n, net->layers[l].activation, net->layers[l].delta);
+            free(temp_output);
+        }
+
         assemble_tile(net, net->batch, depth,
                         net->layers[group_end_idx].delta, net->layers[group_end_idx].delta,
                         net->layers[group_end_idx].delta_in_h_without_boundry, net->layers[group_end_idx].delta_in_w_without_boundry,
@@ -298,8 +323,9 @@ int main_device(int argc, char* argv[]){
             clear_edges_delta_device(net, l, ftp_params.NUM_TILES_Y, ftp_params.NUM_TILES_X, ftp_params.DEVICE_ID_Y, ftp_params.DEVICE_ID_X);
             clear_spurious_edges_delta(net, l);
 
-            if(net->layers[l].type == CONVOLUTIONAL)
+            if(net->layers[l].type == CONVOLUTIONAL){
                 backward_convolutional_layer_dist_delta(net->layers[l], *net);
+	        }
             else if(net->layers[l].type == MAXPOOL){
                 backward_maxpool_layer(net->layers[l], *net);
                 remove_extra_boundary_data(net, l);
@@ -574,6 +600,34 @@ void backprop_layer0(network* net, float* INPUT_BOUNDRY){
 
     int sample_size_unit_boundry = featuremap_without_boundry_width*featuremap_without_boundry_height*net->layers[0].c;
     int sample_size_with_boundry = x_dim_nob*y_dim_nob*net->layers[0].c;
+
+
+
+    if(net->layers[0].type == CONVOLUTIONAL){
+            int l = 0;//group_end_idx;
+
+            int out_h_orig = (net->layers[1].featuremap_in_h_without_boundry + 2*(net->layers[1].size/2));
+            int out_w_orig = (net->layers[1].featuremap_in_w_without_boundry + 2*(net->layers[1].size/2));
+
+            int out_h_nob = net->layers[1].featuremap_in_h_without_boundry;
+            int out_w_nob = net->layers[1].featuremap_in_w_without_boundry;
+
+            int left_offset = net->layers[1].size/2;
+            int top_offset = net->layers[1].size/2;
+
+            float* temp_output = calloc(out_h_nob*out_w_nob*net->batch*net->layers[l].n, sizeof(float));
+
+            copy_slice(temp_output, net->layers[l].output, net->batch, net->layers[l].n,
+                            out_h_orig, out_w_orig,
+                            out_h_nob, out_w_nob,
+                            left_offset, top_offset,
+                            0, 0,
+                            out_h_nob, out_w_nob, out_h_nob, out_w_nob,
+                            net->workspace);
+            gradient_array(temp_output, out_h_nob*out_w_nob*net->batch*net->layers[l].n, net->layers[l].activation, net->layers[l].delta);
+            free(temp_output);
+    }
+
 
     for(int b = 0; b < net->batch; b++)
     {

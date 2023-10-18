@@ -62,7 +62,7 @@ int main_yolo(){
             for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
             {
 
-                net->layers[l].weights[i] = 0.01;
+                net->layers[l].weights[i] = (l < 6) ? -0.01 : 0.01;
             }        
 
 
@@ -997,7 +997,7 @@ int layer_partition_main(int argc, char* argv[]){
 
 
 int main(int argc, char* argv[]){
-    data_parallelism_main(argc, argv);
+    //data_parallelism_main(argc, argv);
     //layer_partition_main(argc, argv);
-    //main_yolo();
+    main_yolo();
 }
