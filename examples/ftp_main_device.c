@@ -26,6 +26,55 @@ extern int cumulative;
 
 void backprop_layer0(network* net, float* INPUT_BOUNDRY);
 
+void read_input_chunk(network* net, float* input, int num_tiles_x, int num_tiles_y, int tile_id_x, int tile_id_y){
+    FILE *fptr;
+    fptr = fopen("input.dat","r");
+    float* input_full = calloc(608*608*3*net->batch, sizeof(float));
+    fread(input_full, 4, 608*608*3*net->batch, fptr);
+
+    int spurious_pixels_x = ((num_tiles_x*net->layers[0].featuremap_in_w_without_boundry) - 608);
+    int spurious_pixels_y = ((num_tiles_y*net->layers[0].featuremap_in_h_without_boundry) - 608);
+
+    int copy_height = (tile_id_y == (num_tiles_y - 1)) ? (net->layers[0].featuremap_in_h_without_boundry - spurious_pixels_y) : net->layers[0].featuremap_in_h_without_boundry;
+    int copy_width = (tile_id_x == (num_tiles_x - 1)) ? (net->layers[0].featuremap_in_w_without_boundry - spurious_pixels_x) : net->layers[0].featuremap_in_w_without_boundry;
+
+
+    copy_slice(input, input_full, net->batch, 3,
+                    608, 608,
+                    net->layers[0].featuremap_in_h_without_boundry, net->layers[0].featuremap_in_w_without_boundry,
+                    tile_id_x*net->layers[0].featuremap_in_w_without_boundry, tile_id_y*net->layers[0].featuremap_in_h_without_boundry,
+                    0, 0,
+                    copy_height, copy_width, copy_height, copy_width,
+                    net->workspace);
+
+    fclose(fptr);    
+}
+
+void read_delta_chunk(network* net, float* delta, int num_tiles_x, int num_tiles_y, int tile_id_x, int tile_id_y){
+    FILE *fptr;
+    fptr = fopen("delta_layer_15.dat","r");
+    float* delta_full = calloc(38*38*256*net->batch, sizeof(float));
+    fread(delta_full, 4, 38*38*256*net->batch, fptr);
+
+    int spurious_pixels_x = ((num_tiles_x*net->layers[15].delta_in_w_without_boundry) - 38);
+    int spurious_pixels_y = ((num_tiles_y*net->layers[15].delta_in_h_without_boundry) - 38);
+
+    int copy_height = (tile_id_y == (num_tiles_y - 1)) ? (net->layers[15].delta_in_h_without_boundry - spurious_pixels_y) : net->layers[15].delta_in_h_without_boundry;
+    int copy_width = (tile_id_x == (num_tiles_x - 1)) ? (net->layers[15].delta_in_w_without_boundry - spurious_pixels_x) : net->layers[15].delta_in_w_without_boundry;
+
+
+    copy_slice(delta, delta_full, net->batch, 256,
+                    38, 38,
+                    net->layers[15].delta_in_h_without_boundry, net->layers[15].delta_in_w_without_boundry,
+                    tile_id_x*net->layers[15].delta_in_w_without_boundry, tile_id_y*net->layers[15].delta_in_h_without_boundry,
+                    0, 0,
+                    copy_height, copy_width, copy_height, copy_width,
+                    net->workspace);
+
+    fclose(fptr);    
+}
+
+
 int main_device(int argc, char* argv[]){
 
     struct timeval total_time_before, total_time_after, total_time_result;
@@ -83,8 +132,10 @@ int main_device(int argc, char* argv[]){
             for (int j = 0; j < ftp_params.NUM_TILES_Y; ++j)
             {
                 if(!((i == 0) && (j == 0))){
-                   send_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, i, j);
-                   send_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, i, j);
+                   read_delta_chunk(net, INPUT_IMAGE, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, i, j);
+		   send_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, i, j);
+                   read_delta_chunk(net, OUTPUT_DELTA, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, i, j);
+		   send_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, i, j);
                 }
             }
         }

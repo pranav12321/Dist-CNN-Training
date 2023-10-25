@@ -158,7 +158,7 @@ void init_network(network** net_inp){
 
             for (int i_f = 0; i_f < (total_filter_elements); ++i_f)
             {
-                    net->layers[i].weights[i_f] = (i < 6) ? -0.01 : 0.01;
+                    net->layers[i].weights[i_f] = (i < 6) ? 0.01 : 0.01;
             }
 
             // Get shared memory 
