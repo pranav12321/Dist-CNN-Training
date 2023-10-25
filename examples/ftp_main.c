@@ -13,7 +13,7 @@
 
 #define LAYER_SIZE 608
 #define FILTER_SIZE 32
-#define BATCH_SIZE 1
+#define BATCH_SIZE 2
 
 int main_yolo(){
     //make_convolutional_layer(int batch, int h,
@@ -62,7 +62,7 @@ int main_yolo(){
             for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
             {
 
-                net->layers[l].weights[i] = (l < 6) ? -0.01 : 0.01;
+                net->layers[l].weights[i] = (l < 6) ? 0.01 : 0.01;
             }        
 
 
@@ -85,8 +85,16 @@ int main_yolo(){
     net->inputs = LAYER_SIZE*LAYER_SIZE*3;
     net->input = calloc(net->batch*net->inputs, sizeof(float));
 
-    fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
-    fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+    //fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
+    //fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+
+    FILE* frptr = fopen("input.dat","r");
+    fread(net->input, 4, 608*608*3*net->batch, frptr);
+    float* image_input = net->input;
+    fclose(frptr);
+    frptr = fopen("delta_layer_15.dat","r");
+    fread(net->layers[net->n - 1].delta, 4, net->layers[net->n - 1].outputs*net->batch, frptr);
+    fclose(frptr);
 
     for (int l = 0; l < net->n; ++l)
     {
@@ -190,8 +198,8 @@ int main_yolo(){
     }
 
         net->index = 0;
-        net->input = calloc(net->batch*net->inputs, sizeof(float));
-        fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
+        net->input = image_input;//calloc(net->batch*net->inputs, sizeof(float));
+        //fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
         net->delta = calloc(net->batch*net->inputs*4, sizeof(float));
         printf("Filter stacks = %d\n", net->layers[0].n);
         net->layers[0].backward(net->layers[0], *net);

@@ -123,22 +123,25 @@ int main_device(int argc, char* argv[]){
 
     if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0){
 
-        fill_cpu(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0.1, INPUT_IMAGE, 1);
-        fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
-        fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+        //fill_cpu(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, 0.1, INPUT_IMAGE, 1);
+        //read_input_chunk(net, INPUT_IMAGE, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, 0, 0);
+        //fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, OUTPUT_DELTA, 1);
+        //fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
 
         for (int i = 0; i < ftp_params.NUM_TILES_X; ++i)
         {
             for (int j = 0; j < ftp_params.NUM_TILES_Y; ++j)
             {
                 if(!((i == 0) && (j == 0))){
-                   read_delta_chunk(net, INPUT_IMAGE, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, i, j);
+                   read_input_chunk(net, INPUT_IMAGE, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, i, j);
 		   send_boundry(INPUT_IMAGE, net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, i, j);
                    read_delta_chunk(net, OUTPUT_DELTA, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, i, j);
 		   send_boundry(OUTPUT_DELTA, net->batch*net->layers[net->n - 1].outputs, i, j);
                 }
             }
         }
+	read_input_chunk(net, INPUT_IMAGE, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, 0, 0);
+	read_delta_chunk(net, OUTPUT_DELTA, ftp_params.NUM_TILES_X, ftp_params.NUM_TILES_Y, 0, 0);
     }
     else{
        cumulative += (net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c);
