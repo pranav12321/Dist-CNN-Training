@@ -24,6 +24,8 @@ void shortcut_cpu(int batch, int w1, int h1, int c1, float *add, int w2, int h2,
 
 void mean_cpu(float *x, int batch, int filters, int spatial, float *mean);
 void variance_cpu(float *x, float *mean, int batch, int filters, int spatial, float *variance);
+void mean_cpu_distributed_ftp(ftp* ftp_params, float *x, int batch, int filters, int spatial, float *mean);
+void variance_cpu_distributed_ftp(ftp* ftp_params, float *x, float *mean, int batch, int filters, int spatial, float *variance);
 
 void scale_bias(float *output, float *scales, int batch, int n, int size);
 void backward_scale_cpu(float *x_norm, float *delta, int batch, int n, int size, float *scale_updates);

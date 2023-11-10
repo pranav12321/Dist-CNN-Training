@@ -2,6 +2,8 @@
 #define UTILS_H
 #include <stdio.h>
 #include <time.h>
+#include <semaphore.h>
+#include <sys/mman.h>
 #include "darknet.h"
 #include "list.h"
 
@@ -48,6 +50,13 @@ float **one_hot_encode(float *a, int n, int k);
 float sec(clock_t clocks);
 void print_statistics(float *a, int n);
 int int_index(int *a, int val, int n);
+void create_shared_memory(char* shm_file, float** buffer, int num_processes, int size_per_process);
+void get_shared_memory(char* shm_file, float** buffer, int num_processes, int size_per_process);
+void create_process_semaphore(char* mutex_file, sem_t **mutex);
+void open_process_semaphore(char* mutex_file, sem_t **mutex);
+void process_sema_wait(int num_processes, sem_t *mutex);
+void process_sema_post(int num_processes, sem_t *mutex);
+void write_data_to_file(char* prefix, int device_id, int layer, float* data, int num_elements);
 
 #endif
 

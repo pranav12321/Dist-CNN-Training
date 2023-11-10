@@ -2,8 +2,35 @@
 
 static int coco_ids[] = {1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,27,28,31,32,33,34,35,36,37,38,39,40,41,42,43,44,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,67,70,72,73,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90};
 
+void load_data_detector(load_args* args, network** nets, network* net, data* train, pthread_t* load_thread,  data* buffer, double* time, int ngpus){
+    int count = 0; int i;
+    layer l = net->layers[net->n - 1];
+    if(l.random && count++%10 == 0){
+        printf("Resizing\n");
+        int dim = (rand() % 10 + 10) * 32;
+        if (get_current_batch(net)+200 > net->max_batches) dim = 608;
+        //int dim = (rand() % 4 + 16) * 32;
+        args->w = dim;
+        args->h = dim;
 
-void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, int ngpus, int clear)
+        pthread_join(*load_thread, 0);
+        *train = *buffer;
+        free_data(*train);
+        *load_thread = load_data(*args);
+
+        #pragma omp parallel for
+        for(i = 0; i < ngpus; ++i){
+           // resize_network(nets[i], dim, dim);
+        }
+        net = nets[0];
+    }
+    *time=what_time_is_it_now();
+    pthread_join(*load_thread, 0);
+    *train = *buffer;
+    *load_thread = load_data(*args);
+}
+
+void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, int ngpus, int clear, int ftp_tile_id)
 {
     list *options = read_data_cfg(datacfg);
     char *train_images = option_find_str(options, "train", "data/train.list");
@@ -28,6 +55,11 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     }
     srand(time(0));
     network *net = nets[0];
+
+#ifdef FTP
+    ftp* ftp_params = parse_ftp_cfg("cfg/ftp.cfg", ftp_tile_id);
+    init_ftp(ftp_params, net);
+#endif
 
     int imgs = net->batch * net->subdivisions * ngpus;
     printf("Learning Rate: %g, Momentum: %g, Decay: %g\n", net->learning_rate, net->momentum, net->decay);
@@ -54,37 +86,29 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
     args.type = DETECTION_DATA;
     //args.type = INSTANCE_DATA;
     args.threads = 64;
-
-    pthread_t load_thread = load_data(args);
+    pthread_t load_thread;
+#ifdef FTP
+    if(ftp_params->is_main_gateway)
+    	load_thread = load_data(args);
+#else
+    load_thread = load_data(args);
+#endif
     double time;
-    int count = 0;
+    //int count = 0;
     //while(i*imgs < N*120){
     while(get_current_batch(net) < net->max_batches){
-        if(l.random && count++%10 == 0){
-            printf("Resizing\n");
-            int dim = (rand() % 10 + 10) * 32;
-            if (get_current_batch(net)+200 > net->max_batches) dim = 608;
-            //int dim = (rand() % 4 + 16) * 32;
-            printf("%d\n", dim);
-            args.w = dim;
-            args.h = dim;
-
-            pthread_join(load_thread, 0);
-            train = buffer;
-            free_data(train);
-            load_thread = load_data(args);
-
-            #pragma omp parallel for
-            for(i = 0; i < ngpus; ++i){
-                resize_network(nets[i], dim, dim);
-            }
-            net = nets[0];
-        }
-        time=what_time_is_it_now();
-        pthread_join(load_thread, 0);
-        train = buffer;
+#ifdef FTP
+    if(ftp_params->is_main_gateway){
         load_thread = load_data(args);
-
+        load_data_detector(&args, nets, net, &train, &load_thread, &buffer, &time, ngpus);
+        //train.X.rows = args.n;
+    }
+    else{
+        train.X.rows = args.n;
+    }
+#else
+    load_thread = load_data(args);
+#endif
         /*
            int k;
            for(k = 0; k < l.max_boxes; ++k){
@@ -120,8 +144,58 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
             loss = train_networks(nets, ngpus, train, 4);
         }
 #else
+#ifdef FTP
+        network* net_ref = load_network(cfgfile, weightfile, clear);
+        net_ref->train = 1;
+        for(i=0; i<net->n;i++){ int j;
+            for(j=0; j<net->layers[i].nweights;j++){
+                net->layers[i].weights[j] = (j%2 == 0) ? 0.01 : 0.01;
+                net_ref->layers[i].weights[j] = (j%2 == 0) ? 0.01 : 0.01;
+        }
+        } 
+        loss = train_network_distributed_ftp(ftp_params, net, net_ref, train);
+#else
         loss = train_network(net, train);
 #endif
+#endif
+
+           FILE *fptr;
+
+           char* file_prefix = "weight_updates_device_";
+           char file_name[30];
+           strcpy(file_name, file_prefix);
+
+           file_name[strlen(file_prefix)] = (char)(ftp_params->device_id_x + 48);
+           file_name[strlen(file_prefix) + 1] = (char)(ftp_params->device_id_y + 48);
+           file_name[strlen(file_prefix) + 2] = '\0';
+
+           fptr = fopen(file_name,"w");
+
+           if(fptr == NULL)
+           {
+              printf("Error!");
+              exit(1);
+           }
+
+           int l;
+           for (l = 0; l < ftp_params->fused_layers; ++l){
+
+                if(net->layers[l].type == CONVOLUTIONAL){
+                    int num_filters = net->layers[l].n;
+                    int filter_size = net->layers[l].size;
+                    int channels = net->layers[l].c;
+                      
+                    int n;
+                    for (n = 0; n < (channels*filter_size*filter_size*num_filters); ++n)
+                    {
+                        fprintf(fptr,"%.4f\n", net->layers[l].weight_updates[n]);
+                    }
+                    fprintf(fptr,"\n\n");
+                }
+          }
+
+
+          while(1);
         if (avg_loss < 0) avg_loss = loss;
         avg_loss = avg_loss*.9 + loss*.1;
 
@@ -559,7 +633,7 @@ void validate_detector_recall(char *cfgfile, char *weightfile)
 }
 
 
-void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen)
+void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen, int ftp_tile_id)
 {
     list *options = read_data_cfg(datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
@@ -794,6 +868,7 @@ void run_detector(int argc, char **argv)
     int cam_index = find_int_arg(argc, argv, "-c", 0);
     int frame_skip = find_int_arg(argc, argv, "-s", 0);
     int avg = find_int_arg(argc, argv, "-avg", 3);
+    int ftp_tile_id = find_int_arg(argc, argv, "-ftpid", 0);
     if(argc < 4){
         fprintf(stderr, "usage: %s %s [train/test/valid] [cfg] [weights (optional)]\n", argv[0], argv[1]);
         return;
@@ -833,8 +908,8 @@ void run_detector(int argc, char **argv)
     char *cfg = argv[4];
     char *weights = (argc > 5) ? argv[5] : 0;
     char *filename = (argc > 6) ? argv[6]: 0;
-    if(0==strcmp(argv[2], "test")) test_detector(datacfg, cfg, weights, filename, thresh, hier_thresh, outfile, fullscreen);
-    else if(0==strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear);
+    if(0==strcmp(argv[2], "test")) test_detector(datacfg, cfg, weights, filename, thresh, hier_thresh, outfile, fullscreen, ftp_tile_id);
+    else if(0==strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear, ftp_tile_id);
     else if(0==strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
     else if(0==strcmp(argv[2], "valid2")) validate_detector_flip(datacfg, cfg, weights, outfile);
     else if(0==strcmp(argv[2], "recall")) validate_detector_recall(cfg, weights);

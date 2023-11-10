@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #ifdef GPU
     #define BLOCK 512
@@ -419,6 +420,30 @@ struct layer{
     cudnnConvolutionBwdFilterAlgo_t bf_algo;
 #endif
 #endif
+    int featuremap_w_without_boundary;
+    int featuremap_h_without_boundary;
+    int featuremap_w_with_boundary;
+    int featuremap_h_with_boundary;
+    int delta_w_without_boundary;
+    int delta_h_without_boundary;
+    int delta_h_with_boundary;
+    int delta_w_with_boundary;
+    int left_boundary_edges_featuremap;
+    int right_boundary_edges_featuremap;
+    int top_boundary_edges_featuremap;
+    int bottom_boundary_edges_featuremap;
+    int left_boundary_edges_delta;
+    int right_boundary_edges_delta;
+    int top_boundary_edges_delta;
+    int bottom_boundary_edges_delta;
+    int original_h;
+    int original_w;
+    int original_out_h;
+    int original_out_w;
+    int extra_input_width;
+    int extra_input_height;
+    int extra_output_width;
+    int extra_output_height;
 };
 
 void free_layer(layer);
@@ -601,6 +626,46 @@ typedef struct list{
     node *back;
 } list;
 
+typedef struct ftp{
+    int num_tiles_x;
+    int num_tiles_y;
+    int device_id_x;
+    int device_id_y;
+    char** IPs;
+    
+    int fused_layers;
+    int num_groups_forward;
+    int num_groups_backward;
+    int* group_sync_forward;
+    int* group_sync_backward;
+
+    int tile_input_x_dim;
+    int tile_input_y_dim;
+
+    int is_device_gateway;
+    int is_main_gateway;
+    int num_device_tiles;
+    int* device_local_tile_ids;
+    int local_device_tile_idx;
+
+    int num_unique_devices; 
+    int* device_gateway_ids;
+
+    float* last_fused_layer_output;
+    float* last_fused_layer_delta;
+
+    sem_t* sm_semas_created;
+    sem_t *init_complete_mutex;
+    sem_t *batch_backprop_completed;
+    sem_t *weights_updated;
+#ifdef GPU
+    float *input_gpu;
+    float *truth_gpu;
+    float *delta_gpu;
+    float *output_gpu;
+#endif
+} ftp;
+
 pthread_t load_data(load_args args);
 list *read_data_cfg(char *filename);
 list *read_cfg(char *filename);
@@ -684,6 +749,7 @@ void save_weights(network *net, char *filename);
 void load_weights(network *net, char *filename);
 void save_weights_upto(network *net, char *filename, int cutoff);
 void load_weights_upto(network *net, char *filename, int start, int cutoff);
+ftp *parse_ftp_cfg(char *filename, int ftp_tile_id);
 
 void zero_objectness(layer l);
 void get_region_detections(layer l, int w, int h, int netw, int neth, float thresh, int *map, float tree_thresh, int relative, detection *dets);
@@ -798,6 +864,11 @@ int *read_intlist(char *s, int *n, int d);
 size_t rand_size_t();
 float rand_normal();
 float rand_uniform(float min, float max);
+
+#ifdef FTP
+void init_ftp(ftp* ftp_params, network* net);
+//float train_network_distributed_ftp(ftp* ftp_params, network *net, data d);
+#endif
 
 #ifdef __cplusplus
 }

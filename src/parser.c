@@ -1310,3 +1310,172 @@ void load_weights(network *net, char *filename)
     load_weights_upto(net, filename, 0, net->n);
 }
 
+void static find_ftp_device_tiles_info(ftp* ftp_params){
+    int total_tiles = ftp_params->num_tiles_x*ftp_params->num_tiles_y;
+    int node_id = ftp_params->num_tiles_x*ftp_params->device_id_y + ftp_params->device_id_x;
+    int num_unique_devices = 0;
+    int* unique_device_ids = calloc(total_tiles, sizeof(int));
+    int i, j;
+
+    if(node_id == 0)
+        ftp_params->is_main_gateway = 1;
+    for (i = 0; i < total_tiles; i++)
+        unique_device_ids[i] = -1;
+    
+    for (i = 0; i < total_tiles; ++i)
+    {
+        int flag = 0;
+        int tile_assigned_device_id = 0;
+        for (j = i; j < total_tiles; ++j){
+            if((strcmp(ftp_params->IPs[i], ftp_params->IPs[j]) == 0) && (unique_device_ids[j] == -1)){
+                if(j == i){
+                    printf("dev gateway %d %d %d\n", i, node_id, unique_device_ids[j]);
+                    num_unique_devices++;
+                }
+               
+                unique_device_ids[j] = num_unique_devices - 1;
+                printf("id=%d %d\n", j, unique_device_ids[j]);
+                if (node_id == i)
+                    ftp_params->is_device_gateway = 1;
+            }
+        }
+    }
+    ftp_params->num_unique_devices = num_unique_devices;
+    ftp_params->device_gateway_ids = calloc(ftp_params->num_unique_devices, sizeof(int));
+    
+    num_unique_devices = 0;
+    for (i = 0; i < total_tiles; i++)
+        unique_device_ids[i] = -1;
+    for (i = 0; i < total_tiles; ++i)
+    {
+        int flag = 0;
+        int tile_assigned_device_id = 0;
+        for (j = i; j < total_tiles; ++j){
+            if((strcmp(ftp_params->IPs[i], ftp_params->IPs[j]) == 0) && (unique_device_ids[j] == -1)){
+                if(j == i){
+                    ftp_params->device_gateway_ids[num_unique_devices++] = i;
+                }
+                unique_device_ids[j] = num_unique_devices - 1;
+            }
+        }
+    } 
+    printf("parser %d %d %d %d %d\n", num_unique_devices, ftp_params->device_gateway_ids[0], ftp_params->device_gateway_ids[1], unique_device_ids[0], unique_device_ids[1]);
+
+    ftp_params->num_device_tiles = 0;
+    ftp_params->local_device_tile_idx = 0;
+    int unique_device_id = unique_device_ids[node_id];
+    for (i = 0; i < total_tiles; ++i)
+    {
+        if(unique_device_ids[i] == unique_device_id){
+            if(i == node_id)
+                ftp_params->local_device_tile_idx = ftp_params->num_device_tiles;
+            ftp_params->num_device_tiles++;
+        }
+    }
+    printf("local idx %d num dev tiles %d devgate %d\n", ftp_params->local_device_tile_idx, ftp_params->num_device_tiles, ftp_params->is_device_gateway);
+    ftp_params->device_local_tile_ids = calloc(ftp_params->num_device_tiles, sizeof(int));
+    int ctr = 0;
+    for (i = 0; i < total_tiles; ++i)
+    {
+        if(unique_device_ids[i] == unique_device_id){
+            ftp_params->device_local_tile_ids[ctr++] = i;
+        }
+    }
+}    
+
+ftp *parse_ftp_cfg(char *filename, int ftp_tile_id){
+    ftp* ftp_params = calloc(1, sizeof(ftp));
+    FILE *file = fopen(filename, "r");
+    if(file == 0) file_error(filename);
+    char *line, *key, *val;
+    size_t len, i, n;
+    int group_val;
+
+    while((line=fgetl(file)) != 0){
+        strip(line);
+	printf("%s\n", line);
+
+        switch(line[0]){
+            case '\0':
+            case '#':
+            case ';':
+                free(line);
+                break;
+            default:
+                len = strlen(line);
+                for(i = 0; i < len; ++i){
+                    if(line[i] == '='){
+                        line[i] = '\0';
+                        val = line+i+1;
+                        break;
+                    }
+                }
+                key = line;
+                if(strcmp(key, "tiles-x") == 0){
+                    ftp_params->num_tiles_x = atoi(val);
+                }
+                else if(strcmp(key, "tiles-y") == 0){
+                    ftp_params->num_tiles_y = atoi(val);
+                }
+                else if(strcmp(key, "tile-IPs") == 0){
+                    ftp_params->device_id_x = ftp_tile_id%(ftp_params->num_tiles_x);
+                    ftp_params->device_id_y = ftp_tile_id/(ftp_params->num_tiles_x);
+                    ftp_params->IPs = calloc(ftp_params->num_tiles_x*ftp_params->num_tiles_y, sizeof(char*));
+                    for(i = 0; i<(ftp_params->num_tiles_x*ftp_params->num_tiles_y); i++){
+                        ftp_params->IPs[i] = calloc(15, sizeof(char));
+                    }
+                    int ctr = 0;
+                    while(ctr < ftp_params->num_tiles_x*ftp_params->num_tiles_y){
+                        line=fgetl(file);
+                        strip(line);
+                        strcpy(ftp_params->IPs[ctr++], line);
+                    }
+                    find_ftp_device_tiles_info(ftp_params);
+                }
+
+                else if(strcmp(key, "group-sync-forward") == 0){
+		    n = 0; len = strlen(val);
+		    for(i = 0; i < len; ++i){
+                        if (val[i] == ',') ++n;
+                    }
+                    ++n;
+		    printf("%d %s\n", n, val);
+                    ftp_params->num_groups_forward = n;
+                    ftp_params->group_sync_forward = calloc(n, sizeof(int));
+                    
+                    for(i = 0; i < n; ++i){
+                        int group_val = atoi(val);
+                        ftp_params->group_sync_forward[i] = group_val;
+			printf("%d\n", ftp_params->group_sync_forward[i]);
+                        val = strchr(val, ',')+1;
+                    }
+                }
+
+                else if(strcmp(key, "group-sync-backward") == 0){
+		    n = 0; len = strlen(val);
+                    for(i = 0; i < len; ++i){
+                        if (val[i] == ',') ++n;
+                    }
+                    ++n;
+		    printf("%d %s\n", n, val);
+                    ftp_params->num_groups_backward = n;
+                    ftp_params->group_sync_backward = calloc(n, sizeof(int));
+
+                    for(i = 0; i < n; ++i){
+                        group_val = atoi(val);
+                        ftp_params->group_sync_backward[i] = group_val;
+			printf("%d\n", ftp_params->group_sync_backward[i]);
+                        val = strchr(val, ',')+1;
+                    }
+                }
+		else if(strcmp(key, "fused-layers") == 0){
+                     ftp_params->fused_layers = atoi(val);		    
+		}
+
+                break;
+        }
+
+    }
+    fclose(file);
+    return ftp_params;
+}

@@ -16,4 +16,8 @@ void pull_batchnorm_layer(layer l);
 void push_batchnorm_layer(layer l);
 #endif
 
+#ifdef FTP
+void forward_batchnorm_layer_distributed_ftp(ftp* ftp_params, layer l, network net);
+#endif
+
 #endif

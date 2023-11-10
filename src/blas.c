@@ -123,6 +123,74 @@ void variance_cpu(float *x, float *mean, int batch, int filters, int spatial, fl
     }
 }
 
+void mean_cpu_distributed_ftp(ftp* ftp_params, float *x, int batch, int filters, int spatial, float *mean)
+{
+    int scale_denominator = batch * spatial * ftp_params->num_tiles_x * ftp_params->num_tiles_y;
+    float scale = 1./scale_denominator;
+    int i,j,k;
+    for(i = 0; i < filters; ++i){
+        mean[i] = 0;
+        for(j = 0; j < batch; ++j){
+            for(k = 0; k < spatial; ++k){
+                int index = j*filters*spatial + i*spatial + k;
+                mean[i] += x[index];
+            }
+        }
+    }
+
+    if(ftp_params->is_main_gateway){
+        float* mean_temp = calloc(filters, sizeof(float));
+        for(i = 1; i < ftp_params->num_tiles_x * ftp_params->num_tiles_y; i++){
+            receive_data(mean_temp, filters, i);
+            for(i = 0; i < filters; i++)
+                mean[i] += mean_temp[i];
+        }
+        for(i = 1; i < ftp_params->num_tiles_x * ftp_params->num_tiles_y; i++)
+            send_data(mean, filters, i);
+        free(mean_temp);
+    }
+    else{
+            send_data(mean, filters, 0);
+            receive_data(mean, filters, 0);
+    }
+    for(i = 0; i < filters; ++i)
+        mean[i] *= scale;
+}
+
+void variance_cpu_distributed_ftp(ftp* ftp_params, float *x, float *mean, int batch, int filters, int spatial, float *variance)
+{
+    int scale_denominator = batch * spatial * ftp_params->num_tiles_x * ftp_params->num_tiles_y - 1;
+    float scale = 1./scale_denominator;
+    int i,j,k;
+    for(i = 0; i < filters; ++i){
+        variance[i] = 0;
+        for(j = 0; j < batch; ++j){
+            for(k = 0; k < spatial; ++k){
+                int index = j*filters*spatial + i*spatial + k;
+                variance[i] += pow((x[index] - mean[i]), 2);
+            }
+        }
+    }
+
+    if(ftp_params->is_main_gateway){
+        float* variance_temp = calloc(filters, sizeof(float));
+        for(i = 1; i < ftp_params->num_tiles_x * ftp_params->num_tiles_y; i++){
+            receive_data(variance_temp, filters, i);
+            for(i = 0; i < filters; i++)
+                variance[i] += variance_temp[i];
+        }
+        for(i = 1; i < ftp_params->num_tiles_x * ftp_params->num_tiles_y; i++)
+            send_data(variance, filters, i);
+        free(variance_temp);
+    }
+    else{
+            send_data(variance, filters, 0);
+            receive_data(variance, filters, 0);
+    }
+    for(i = 0; i < filters; ++i)
+        variance[i] *= scale;
+}
+
 void l2normalize_cpu(float *x, float *dx, int batch, int filters, int spatial)
 {
     int b,f,i;
@@ -151,7 +219,7 @@ void normalize_cpu(float *x, float *mean, float *variance, int batch, int filter
         for(f = 0; f < filters; ++f){
             for(i = 0; i < spatial; ++i){
                 int index = b*filters*spatial + f*spatial + i;
-                x[index] = (x[index] - mean[f])/(sqrt(variance[f]) + .000001f);
+                x[index] = (x[index] - mean[f])/(sqrt(variance[f]) + .000001f);;
             }
         }
     }

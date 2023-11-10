@@ -8,9 +8,11 @@
 #include <limits.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "utils.h"
-
 
 /*
 // old timing. is it better? who knows!!
@@ -724,3 +726,75 @@ float **one_hot_encode(float *a, int n, int k)
     return t;
 }
 
+void create_shared_memory(char* shm_file, float** buffer, int num_processes, int size_per_process){
+    int fd_shm = -1;
+    if ((fd_shm = shm_open (shm_file, O_RDWR | O_CREAT | O_EXCL, 0660)) == -1)
+        error ("shm_open");
+
+    if (ftruncate (fd_shm,num_processes*size_per_process*sizeof(float)) == -1)
+       error ("ftruncate");
+
+    if ((*buffer = mmap (NULL, num_processes*size_per_process*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED,
+            fd_shm, 0)) == MAP_FAILED)
+        error ("mmap");
+}
+
+void get_shared_memory(char* shm_file, float** buffer, int num_processes, int size_per_process){
+    int fd_shm = -1;
+    if ((fd_shm = shm_open (shm_file, O_RDWR, 0)) == -1)
+        error ("shm_open");
+
+    if ((*buffer = mmap (NULL, num_processes*size_per_process*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED,
+            fd_shm, 0)) == MAP_FAILED)
+       error ("mmap");
+}
+
+void create_process_semaphore(char* mutex_file, sem_t **mutex){
+    if ((*mutex = sem_open (mutex_file, O_CREAT, 0660, 0)) == SEM_FAILED)
+        error ("sem create");
+}
+
+void open_process_semaphore(char* mutex_file, sem_t **mutex){
+    if ((*mutex = sem_open (mutex_file, 0, 0, 0)) == SEM_FAILED)
+	error ("sem open");	
+}
+
+void process_sema_wait(int num_processes, sem_t *mutex){
+    int i;
+    for (i = 0; i < num_processes; ++i)
+    {
+        if (sem_wait (mutex) == -1)
+            error ("sem wait");
+    } 
+}
+void process_sema_post(int num_processes, sem_t *mutex){
+    int i;
+    for (i = 0; i < num_processes; ++i)
+    {
+        if (sem_post (mutex) == -1)
+            error ("sem post");
+    }    
+}
+
+void write_data_to_file(char* prefix, int device_id, int layer, float* data, int num_elements)
+{
+    FILE *fptr;
+    char file_name[30];
+    strcpy(file_name, prefix);
+
+    file_name[strlen(prefix)] = (char)(device_id/10 + '0');
+    file_name[strlen(prefix) + 1] = (char)(device_id%10 + '0');
+    file_name[strlen(prefix) + 2] = (char)(layer/10 + '0');
+    file_name[strlen(prefix) + 3] = (char)(layer%10 + '0');
+    file_name[strlen(prefix) + 4] = '\0';
+
+    fptr = fopen(file_name,"w");
+
+    if(fptr == NULL){
+        printf("Error!");   
+        exit(1);             
+    }
+
+    fwrite(data, sizeof(float), num_elements, fptr);
+    fclose(fptr);
+}

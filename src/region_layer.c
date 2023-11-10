@@ -329,8 +329,9 @@ void backward_region_layer(const layer l, network net)
        int index = (b*size + 4)*l.w*l.h;
        gradient_array(l.output + index, l.w*l.h, LOGISTIC, l.delta + index);
        }
-       axpy_cpu(l.batch*l.inputs, 1, l.delta, 1, net.delta, 1);
      */
+       axpy_cpu(l.batch*l.inputs, 1, l.delta, 1, net.delta, 1);
+     
 }
 
 void correct_region_boxes(detection *dets, int n, int w, int h, int netw, int neth, int relative)

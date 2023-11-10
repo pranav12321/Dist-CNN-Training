@@ -412,8 +412,8 @@ int resize_network(network *net, int w, int h)
     net->truths = out.outputs;
     if(net->layers[net->n-1].truths) net->truths = net->layers[net->n-1].truths;
     net->output = out.output;
-    free(net->input);
-    free(net->truth);
+    //free(net->input);
+    //free(net->truth);
     net->input = calloc(net->inputs*net->batch, sizeof(float));
     net->truth = calloc(net->truths*net->batch, sizeof(float));
 #ifdef GPU
