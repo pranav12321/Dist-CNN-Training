@@ -6,6 +6,7 @@
 #include "activations.h"
 #include "layer.h"
 #include "network.h"
+#include "fused_device.h"
 
 typedef layer convolutional_layer;
 
@@ -35,10 +36,8 @@ void swap_binary(convolutional_layer *l);
 void binarize_weights2(float *weights, int n, int size, char *binary, float *scales);
 
 void backward_convolutional_layer(convolutional_layer layer, network net);
-void backward_convolutional_layer_dist(convolutional_layer layer, network net);
-void backward_convolutional_layer_dist_v2(convolutional_layer layer, network net);
-void backward_convolutional_layer_dist_filters(convolutional_layer l, network net);
-void backward_convolutional_layer_dist_delta(convolutional_layer l, network net);
+//void backward_convolutional_layer_dist_filters(ftp_config *ftp_params, convolutional_layer l, network net);
+//void backward_convolutional_layer_dist_delta(ftp_config *ftp_params, convolutional_layer l, network net);
 
 void add_bias(float *output, float *biases, int batch, int n, int size);
 void backward_bias(float *bias_updates, float *delta, int batch, int n, int size);

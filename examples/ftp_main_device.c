@@ -103,7 +103,9 @@ int main_device(int argc, char* argv[]){
 
     network* net;
     init_network(&net);
-
+    net->train = 1;
+    ftp_params.is_main_gateway = 0;
+    if(ftp_params.DEVICE_ID_X == 0 && ftp_params.DEVICE_ID_Y == 0) ftp_params.is_main_gateway = 1;
     float* INPUT_IMAGE = calloc(net->batch*net->layers[0].featuremap_in_h_without_boundry*net->layers[0].featuremap_in_w_without_boundry*net->layers[0].c, sizeof(float));
     float* OUTPUT_DELTA = calloc(net->batch*net->layers[net->n - 1].outputs, sizeof(float));
 
@@ -244,7 +246,10 @@ int main_device(int argc, char* argv[]){
             clear_spurious_edges_featuremap(net, l);
 
             net->index = l;
-            net->layers[l].forward(net->layers[l], *net);
+            if(net->layers[l].type == CONVOLUTIONAL)
+                forward_convolutional_layer_dist_ftp(&ftp_params, net->layers[l], *net);
+            else
+                forward_maxpool_layer(net->layers[l], *net);
 
             if((l == group_start_idx) && (group_start_idx > 0)){
                 free(net->input);
@@ -260,6 +265,18 @@ int main_device(int argc, char* argv[]){
         total_computation_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
         inference_time += (double)(step_time_result.tv_sec + (step_time_result.tv_usec)/1000000.0);
     }
+     int b;
+     for(int b = 0; b < (1); b++){
+         int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
+         printf("batch %d\n", b);
+         for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
+             for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
+                 printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
+             }
+             printf("\n");
+         }
+         printf("\n\n");
+     }
 
     printf("Inference complete\n");
 
@@ -366,6 +383,7 @@ int main_device(int argc, char* argv[]){
             
             net->input = net->layers[l-1].output;
             net->delta = net->layers[l-1].delta;
+            net->index = l;
 
             net->layers[l].w = (l == group_start_idx) ? net->layers[l-1].delta_in_w_without_boundry : net->layers[l-1].delta_in_w_with_boundry;
             net->layers[l].h = (l == group_start_idx) ? net->layers[l-1].delta_in_h_without_boundry : net->layers[l-1].delta_in_h_with_boundry;
@@ -378,12 +396,26 @@ int main_device(int argc, char* argv[]){
             clear_spurious_edges_delta(net, l);
 
             if(net->layers[l].type == CONVOLUTIONAL){
-                backward_convolutional_layer_dist_delta(net->layers[l], *net);
-	        }
+                backward_convolutional_layer_dist_delta(&ftp_params, net->layers[l], *net);
+	    }
             else if(net->layers[l].type == MAXPOOL){
                 backward_maxpool_layer(net->layers[l], *net);
                 remove_extra_boundary_data(net, l);
             }
+     if(l == 11){
+     for(int b = 0; b < (1); b++){
+         int sample_size = net->layers[l-1].out_h*net->layers[l-1].out_w;
+         //printf("batch %d\n", b);
+         for(int i = 0; i < (net->layers[l-1].out_h); i++){
+             for(int j = 0; j < (net->layers[l-1].out_w); j++){
+          //       printf("%.4f ", net->layers[l-1].delta[(b*sample_size) + (i*net->layers[l-1].out_w) + j]);
+             }
+        //     printf("\n");
+         }
+      //   printf("\n\n");
+     }
+     //while(1);
+     }
 
             if(net->layers[l].type == CONVOLUTIONAL){
 
@@ -402,8 +434,6 @@ int main_device(int argc, char* argv[]){
                 net->layers[l].w = featuremap_with_unit_boundry_width;
 
                 net->layers[l].pad = 0;
-
-                net->index = l;
 
                 printf("filter layer %d \n", l);
 
@@ -484,7 +514,7 @@ int main_device(int argc, char* argv[]){
     {
         if(net->layers[l].type == CONVOLUTIONAL){
             net->layers[l].learning_rate_scale = 1.0;
-            update_convolutional_layer(net->layers[l], a);
+            //update_convolutional_layer(net->layers[l], a);
         }
     }
     gettimeofday(&step_time_after, NULL);
@@ -616,7 +646,7 @@ int main_device(int argc, char* argv[]){
               exit(1);             
            }
 
-            for (int l = 0; l < net->n; ++l){
+            for (int l = 3; l < 16; ++l){
                 
                 if(net->layers[l].type == CONVOLUTIONAL){
                     int num_filters = net->layers[l].n;
@@ -626,7 +656,7 @@ int main_device(int argc, char* argv[]){
 
                     for (int n = 0; n < (channels*filter_size*filter_size*num_filters); ++n)
                     {
-                        fprintf(fptr,"%.4f\n", net->layers[l].weights[n]);
+                        fprintf(fptr,"%.4f\n", net->layers[l].weight_updates[n]);
                     }
                     fprintf(fptr,"\n\n");
                 }

@@ -93,6 +93,7 @@ typedef struct ftp_config{
     int NUM_GROUPS_BACKWARD;
     int DEVICE_ID_X;
     int DEVICE_ID_Y;
+    int is_main_gateway;
     int sync_group_vector_forward[MAX_LAYERS];
     int sync_group_vector_backward[MAX_LAYERS];
 } ftp_config;

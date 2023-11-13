@@ -153,12 +153,12 @@ void init_network(network** net_inp){
 
             net->layers[i] = make_convolutional_layer(net->batch, network_params_tile.featuremap_dim_with_boundry_vector[i].y_dim, network_params_tile.featuremap_dim_with_boundry_vector[i].x_dim,
                                                      network_params_tile.featuremap_dim_with_boundry_vector[i].depth, network_params_tile.filter_stack_vector[i], 1,
-                                                     network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0, LEAKY, 0, 0, 0, 0);
+                                                     network_params_tile.filter_size_vector[i], network_params_tile.stride_vector[i], 0, LEAKY, 1, 0, 0, 0);
             int total_filter_elements = net->layers[i].size*net->layers[i].size*net->layers[i].c*net->layers[i].n;
 
             for (int i_f = 0; i_f < (total_filter_elements); ++i_f)
             {
-                    net->layers[i].weights[i_f] = (i < 6) ? 0.01 : 0.01;
+                    net->layers[i].weights[i_f] = (i < 6) ? 0.01 : -0.01;
             }
 
             // Get shared memory 

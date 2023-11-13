@@ -1,6 +1,4 @@
 #include "ftp.h"
-#include "fused.h"
-#include "fused_convolution.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +19,7 @@ int main_yolo(){
     // ACTIVATION activation, int batch_normalize, int binary, int xnor, int adam)
 
     network* net = calloc(1, sizeof(network));//SHARED_NETWORKS[i][j];
-
+    net->train = 1;
     net->n = 16;
     net->layers = calloc(net->n, sizeof(layer));
     net->seen = calloc(1, sizeof(size_t));
@@ -31,25 +29,26 @@ int main_yolo(){
 
     int filter_size = 3;
     int num_layers = 16;
-    int unit_boundry = 1;
+    int unit_boundry = 1; 
+    int batch_norm = 1;
 
     //yolo v2
-    net->layers[0] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE, LAYER_SIZE, 3, FILTER_SIZE, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[0] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE, LAYER_SIZE, 3, FILTER_SIZE, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
     net->layers[1] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE, LAYER_SIZE, 32, 2, 2, 0); 
-    net->layers[2] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/2, LAYER_SIZE/2, 32, 64, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[2] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/2, LAYER_SIZE/2, 32, 64, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
     net->layers[3] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE/2, LAYER_SIZE/2, 64, 2, 2, 0);
-    net->layers[4] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[5] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    net->layers[6] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[4] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[5] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 128, 64, 1, 1, 1, 0, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[6] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 1, 1, 0, LEAKY, batch_norm, 0, 0, 0);
     net->layers[7] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 128, 2, 2, 0);
-    net->layers[8] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[9] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    net->layers[10] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
+    net->layers[8] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[9] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 256, 128, 1, 1, 1, 0, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[10] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
     net->layers[11] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 256, 2, 2, 0);
-    net->layers[12] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[13] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    net->layers[14] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
-    net->layers[15] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[12] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[13] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[14] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 256, 512, 1, 3, 1, 1, LEAKY, batch_norm, 0, 0, 0);
+    net->layers[15] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/16, LAYER_SIZE/16, 512, 256, 1, 1, 1, 0, LEAKY, batch_norm, 0, 0, 0);
 
     for (int l = 0; l < net->n; ++l)
     {
@@ -62,7 +61,7 @@ int main_yolo(){
             for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
             {
 
-                net->layers[l].weights[i] = (l < 6) ? 0.01 : 0.01;
+                net->layers[l].weights[i] = (l < 6) ? 0.01 : -0.01;
             }        
 
 
@@ -98,6 +97,7 @@ int main_yolo(){
 
     for (int l = 0; l < net->n; ++l)
     {
+        printf("%.4f %.4f %.4f %.4f\n", net->input[0], net->input[754], net->input[1345], net->input[2000]);
         net->index = l;
         printf("Filter stacks = %d\n", net->layers[l].n);
         net->layers[l].forward(net->layers[l], *net);
@@ -141,18 +141,17 @@ int main_yolo(){
     //     printf("\n\n");
     // }
 
-    // for(int b = 0; b < (net->layers[net->n - 1].batch); b++){
-    //     int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
-    //     printf("batch %d\n", b);
-    //     for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
-    //         for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
-    //             printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n\n");
-    // }
-
+     for(int b = 0; b < (1); b++){
+         int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
+         printf("batch %d\n", b);
+         for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
+             for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
+                 printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
+             }
+             printf("\n");
+         }
+         printf("\n\n");
+     }
     update_args a;
     a.batch = net->batch;
     a.learning_rate = 0.001;
@@ -167,21 +166,22 @@ int main_yolo(){
         printf("Filter stacks = %d\n", net->layers[l].n);
         net->layers[l].backward(net->layers[l], *net);
         net->layers[l].learning_rate_scale = 1.0;
-        update_convolutional_layer(net->layers[l], a);
+//        update_convolutional_layer(net->layers[l], a);
 
-        // printf("Delta layer %d\n", l);
-
-        // for (int m = 0; m < net->layers[l].out_h; ++m)
-        // {
-        //     for (int n = 0; n < net->layers[l].out_w; ++n)
-        //     {
-        //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-        //     }
-        //     printf("\n");
+         printf("Delta layer %d\n", l);
+         if(l == 11){
+         for (int m = 0; m < net->layers[l-1].out_h; ++m)
+         {
+             for (int n = 0; n < net->layers[l-1].out_w; ++n)
+             {
+            //     printf("%.4f ", net->layers[l-1].delta[m*net->layers[l-1].out_w + n]);
+             }
+          //   printf("\n");
             
-        // }
-        // printf("\n");
-
+         }
+         //printf("\n");
+         //while(1);
+         }
 
 
 
@@ -204,7 +204,7 @@ int main_yolo(){
         printf("Filter stacks = %d\n", net->layers[0].n);
         net->layers[0].backward(net->layers[0], *net);
         net->layers[0].learning_rate_scale = 1.0;
-        update_convolutional_layer(net->layers[0], a);
+  //      update_convolutional_layer(net->layers[0], a);
 
 
             for (int m = 0; m < 3; ++m)
@@ -444,7 +444,7 @@ int main_yolo(){
               printf("Error!");   
               exit(1);             
            }
-            for (int l = 0; l < net->n; ++l){
+            for (int l = 3; l < 16; ++l){
                 
                 if(net->layers[l].type == CONVOLUTIONAL){
                     int num_filters = net->layers[l].n;
@@ -454,7 +454,7 @@ int main_yolo(){
 
                     for (int n = 0; n < (channels*filter_size*filter_size*num_filters); ++n)
                     {
-                        fprintf(fptr,"%.4f\n", net->layers[l].weights[n]);
+                        fprintf(fptr,"%.4f\n", net->layers[l].weight_updates[n]);
                     }
                     fprintf(fptr,"\n\n");
                 }
