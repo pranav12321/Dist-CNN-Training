@@ -342,6 +342,7 @@ void init_transport(char* argv[]){
 
             if(strcmp(DEVICE_IPs[i], DEVICE_IPs[ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y]) == 0){
                 server_accept_local_tile(i, j, cs);
+                //server_accept_network_tile(i, j, cs);
             }
             else{
                 server_accept_network_tile(i, j, cs);
@@ -367,6 +368,7 @@ void init_transport(char* argv[]){
         {
             if(strcmp(DEVICE_IPs[i], DEVICE_IPs[ftp_params.DEVICE_ID_X + ftp_params.NUM_TILES_X*ftp_params.DEVICE_ID_Y]) == 0){
                 client_connect_local_tile(i, j, cs);
+                //client_connect_network_tile(i, j, cs);
             }
             else{
                 client_connect_network_tile(i, j, cs);
@@ -446,7 +448,7 @@ void receive_boundry(float* data_float, int size, int device_id_x, int device_id
 
             int bytes = recv( network_links[device_id_x + ftp_params.NUM_TILES_X*device_id_y]->socket_fd[0] , receive_buffer, MAX_BOUNDARY_SIZE_PER_DEVICE*sizeof(float), MSG_DONTWAIT);
 
-            // if(bytes > 0)
+            //if(bytes > 0)
             //     printf("Client %d %d received %d raw bytes\n", ftp_params.DEVICE_ID_X, ftp_params.DEVICE_ID_Y, bytes);
 
             if(bytes > 0){     

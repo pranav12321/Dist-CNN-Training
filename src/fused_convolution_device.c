@@ -29,7 +29,8 @@ static void get_group_boundry_data_device(
     float* boundry_data = calloc(rows*cols*depth*batch, sizeof(float));
     *device_data = boundry_data;
     //TODO: ASSERT CHECK DIM OVER/UNDERFLOW
-
+    cumulative += rows*cols*depth;
+    printf("Cumulative: %d\n", cumulative);
     int x_dim;
     int y_dim; 
 
@@ -55,7 +56,7 @@ static void get_group_boundry_data_device(
         fill_cpu(rows*cols*depth*batch, 0, *device_data, 1);
         return;
     }
-
+  
     receive_boundry(boundry_data, rows*cols*depth*batch, device_src_id_x, device_src_id_y);
 
 }

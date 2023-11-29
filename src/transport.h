@@ -37,7 +37,7 @@ void receive_boundry(float*, int, int, int);
 // #define NUM_TILES_X 2
 // #define NUM_TILES_Y 2
 
-#define MAX_BOUNDARY_SIZE_PER_DEVICE 60000
+#define MAX_BOUNDARY_SIZE_PER_DEVICE 50000
 
 #define MAX_PACKETS_PER_DEVICE 10
 

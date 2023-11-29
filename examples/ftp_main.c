@@ -13,7 +13,7 @@
 
 #define LAYER_SIZE 608
 #define FILTER_SIZE 32
-#define BATCH_SIZE 2
+#define BATCH_SIZE 1
 
 int main_yolo(){
     //make_convolutional_layer(int batch, int h,
@@ -40,7 +40,7 @@ int main_yolo(){
     net->layers[3] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE/2, LAYER_SIZE/2, 64, 2, 2, 0);
     net->layers[4] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     net->layers[5] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 128, 64, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
-    net->layers[6] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
+    net->layers[6] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 64, 128, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     net->layers[7] = make_maxpool_layer(BATCH_SIZE, LAYER_SIZE/4, LAYER_SIZE/4, 128, 2, 2, 0);
     net->layers[8] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 128, 256, 1, 3, 1, 1, LEAKY, 0, 0, 0, 0);
     net->layers[9] = make_convolutional_layer(BATCH_SIZE, LAYER_SIZE/8, LAYER_SIZE/8, 256, 128, 1, 1, 1, 0, LEAKY, 0, 0, 0, 0);
@@ -80,80 +80,58 @@ int main_yolo(){
         }
     }
     printf("wsize = %d inputs = %d outputs = %d\n", max*sizeof(float), net->inputs, net->layers[0].outputs);
-    net->workspace = calloc(max, sizeof(float));
+    //net->workspace = calloc(max, sizeof(float));
+
+    #ifdef GPU
+        net->workspace = cuda_make_array(0, (max-1)/sizeof(float)+1);
+    #else
+        net->workspace = calloc(max, sizeof(float));
+    #endif
 
     net->inputs = LAYER_SIZE*LAYER_SIZE*3;
     net->input = calloc(net->batch*net->inputs, sizeof(float));
 
-    //fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
-    //fill_cpu(net->batch*net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
-
+    //fill_cpu(net->batch*net->inputs, 0.5437, net->input, 1);
+    //fill_cpu(net->batch*net->layers[net->n - 1].outputs, -0.1, net->layers[net->n - 1].delta, 1);
+    
     FILE* frptr = fopen("input.dat","r");
-    fread(net->input, 4, 608*608*3*net->batch, frptr);
+    fread(net->input, sizeof(float), 608*608*3*net->batch, frptr);
     float* image_input = net->input;
     fclose(frptr);
     frptr = fopen("delta_layer_15.dat","r");
-    fread(net->layers[net->n - 1].delta, 4, net->layers[net->n - 1].outputs*net->batch, frptr);
+    fread(net->layers[net->n - 1].delta, sizeof(float), net->layers[net->n - 1].outputs*net->batch, frptr);
     fclose(frptr);
+    
+    printf("input0 %.4f %.4f delta0 %.4f %.4f\n", net->input[0], net->input[net->inputs-1], net->layers[net->n - 1].delta[0],  net->layers[net->n - 1].delta[net->layers[net->n - 1].outputs - 1]);
+ 
+    printf("input1 %.4f %.4f delta1 %.4f %.4f\n", net->input[net->inputs], net->input[608*608*3*2 - 1], net->layers[net->n - 1].delta[net->layers[net->n - 1].outputs],  net->layers[net->n - 1].delta[net->layers[net->n - 1].outputs*net->batch - 1]);
+
+#ifdef GPU
+    net->input_gpu = cuda_make_array(net->input, 608*608*3*net->batch);
+    float* image_input_gpu = net->input_gpu;
+    cuda_push_array(net->layers[net->n - 1].delta_gpu, net->layers[net->n - 1].delta, net->layers[net->n - 1].outputs*net->batch);
+    for (int l = 0; l < net->n; ++l)
+    {
+        cuda_push_array(net->layers[l].weights_gpu, net->layers[l].weights, net->layers[l].nweights);
+    }
+#endif
+
 
     for (int l = 0; l < net->n; ++l)
     {
         net->index = l;
         printf("Filter stacks = %d\n", net->layers[l].n);
+
+#ifdef GPU
+	net->layers[l].forward_gpu(net->layers[l], *net);
+	net->input_gpu = net->layers[l].output_gpu;
+#else
         net->layers[l].forward(net->layers[l], *net);
         net->input = net->layers[l].output;
-
-
-        // for (size_t i = 0; i < net->layers[l].out_h; i++)
-        // {
-        //     for (size_t j = 0; j < net->layers[l].out_w; j++)
-        //     {
-        //         printf("%.4f ", net->layers[l].output[i*net->layers[l].out_w + j]);
-        //     }
-        //     printf("\n");
-            
-        // }
-        // printf("\n");
-
-        // for (size_t i = 0; i < 12; i++)
-        // {
-        //     for (size_t j = 0; j < 12; j++)
-        //     {
-        //         printf("%.2f ", net->layers[l].output[144 + i*12 + j]);
-        //     }
-        //     printf("\n");
-            
-        // }
-        // printf("\n");
-
+#endif
     }
 
-
-    // for(int b = 0; b < (net->layers[0].batch); b++){
-    //     int sample_size = net->layers[0].out_h*net->layers[0].out_w;
-    //     printf("batch %d\n", b);
-    //     for(int i = 0; i < (net->layers[0].out_h); i++){
-    //         for(int j = 0; j < (net->layers[0].out_w); j++){
-    //             printf("%.4f ", net->layers[0].output[(b*sample_size) + (i*net->layers[0].out_w) + j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n\n");
-    // }
-
-    // for(int b = 0; b < (net->layers[net->n - 1].batch); b++){
-    //     int sample_size = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w;
-    //     printf("batch %d\n", b);
-    //     for(int i = 0; i < (net->layers[net->n - 1].out_h); i++){
-    //         for(int j = 0; j < (net->layers[net->n - 1].out_w); j++){
-    //             printf("%.4f ", net->layers[net->n - 1].output[(b*sample_size) + (i*net->layers[net->n - 1].out_w) + j]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n\n");
-    // }
-
-    update_args a;
+    update_args a = {0};
     a.batch = net->batch;
     a.learning_rate = 0.001;
     a.momentum = 0.9;
@@ -162,50 +140,42 @@ int main_yolo(){
     for (int l = (net->n - 1); l >=1; --l)
     {
         net->index = l;
+        printf("Filter stacks = %d\n", net->layers[l].n);
+        
+#ifdef GPU
+	net->input_gpu = net->layers[l-1].output_gpu;
+	net->delta_gpu = net->layers[l-1].delta_gpu;
+        net->layers[l].backward_gpu(net->layers[l], *net);
+	net->layers[l].learning_rate_scale = 1.0;
+	if(net->layers[l].type == CONVOLUTIONAL)
+	    net->layers[l].update_gpu(net->layers[l], a);
+#else
         net->input = net->layers[l-1].output;
         net->delta = net->layers[l-1].delta;
-        printf("Filter stacks = %d\n", net->layers[l].n);
         net->layers[l].backward(net->layers[l], *net);
         net->layers[l].learning_rate_scale = 1.0;
-        update_convolutional_layer(net->layers[l], a);
-
-        // printf("Delta layer %d\n", l);
-
-        // for (int m = 0; m < net->layers[l].out_h; ++m)
-        // {
-        //     for (int n = 0; n < net->layers[l].out_w; ++n)
-        //     {
-        //         printf("%.2f ", net->layers[l].delta[m*net->layers[l].out_w + n]);
-        //     }
-        //     printf("\n");
-            
-        // }
-        // printf("\n");
-
-
-
-
-    //     for (int m = 0; m < 12; ++m)
-    //     {
-    //         for (int n = 0; n < 12; ++n)
-    //         {
-    //             printf("%.2f ", net->layers[l].delta[144 + m*12 + n]);
-    //         }
-    //         printf("\n");
-            
-    //     }
-    //     printf("\n");
+	if(net->layers[l].type == CONVOLUTIONAL)
+            net->layers[l].update(net->layers[l], a);
+#endif
     }
 
         net->index = 0;
-        net->input = image_input;//calloc(net->batch*net->inputs, sizeof(float));
-        //fill_cpu(net->batch*net->inputs, 0.1, net->input, 1);
-        net->delta = calloc(net->batch*net->inputs*4, sizeof(float));
-        printf("Filter stacks = %d\n", net->layers[0].n);
+#ifdef GPU
+        net->input_gpu = image_input_gpu;
+        cudaError_t status = cudaMalloc((void **)&net->delta_gpu, net->batch*net->inputs*sizeof(float));
+	check_error(status);
+        net->layers[0].backward_gpu(net->layers[0], *net);
+        net->layers[0].learning_rate_scale = 1.0;
+        if(net->layers[0].type == CONVOLUTIONAL)
+            net->layers[0].update_gpu(net->layers[0], a);
+#else
+        net->input = image_input;
+        net->delta = calloc(net->batch*net->inputs, sizeof(float));
         net->layers[0].backward(net->layers[0], *net);
         net->layers[0].learning_rate_scale = 1.0;
-        update_convolutional_layer(net->layers[0], a);
-
+        if(net->layers[0].type == CONVOLUTIONAL)
+            net->layers[0].update(net->layers[0], a);
+#endif
 
             for (int m = 0; m < 3; ++m)
             {
@@ -435,9 +405,16 @@ int main_yolo(){
 
            int num;
            FILE *fptr;
-
-           // use appropriate location if you are using MacOS or Linux
-           fptr = fopen("weights_reference.txt","w");
+           char* file_name = "weights_reference.txt";
+#ifdef GPU 
+    file_name = "weights_reference_gpu.txt";
+    for (int l = 0; l < net->n; ++l)
+    {
+        cuda_pull_array(net->layers[l].weight_updates_gpu, net->layers[l].weight_updates, net->layers[l].nweights);
+        cuda_pull_array(net->layers[l].weights_gpu, net->layers[l].weights, net->layers[l].nweights);
+    }
+#endif
+           fptr = fopen(file_name,"w");
 
            if(fptr == NULL)
            {
@@ -558,7 +535,7 @@ int data_parallelism_main(int argc, char* argv[]){
     LAYER_TYPE layer_type_vector[16] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
-    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 2, 3, 1, 3, 1};
+    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 3, 2, 3, 1, 3, 2, 3, 1, 3, 1};
     int layer_length_vector[16] = {INPUT_SIZE, INPUT_SIZE, INPUT_SIZE/2, INPUT_SIZE/2, INPUT_SIZE/4,
                 INPUT_SIZE/4, INPUT_SIZE/4, INPUT_SIZE/4, INPUT_SIZE/8, INPUT_SIZE/8,
                 INPUT_SIZE/8, INPUT_SIZE/8, INPUT_SIZE/16, INPUT_SIZE/16, INPUT_SIZE/16,
@@ -584,6 +561,7 @@ int data_parallelism_main(int argc, char* argv[]){
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
+    net->batch = batch;
 
     int device_batch = end_sample_idx - start_sample_idx + 1;
     int subdivisions = device_batch; //change if too big
@@ -606,7 +584,22 @@ int data_parallelism_main(int argc, char* argv[]){
             {
                     net->layers[i].weights[i_f] = 0.01;
             }
+            //Get shared memory
+            //float* device_weight_update_buffers;
+            //char shm_file[3];
+            //shm_file[0] = '/';
+            //shm_file[1] = '0' + i;
+            //shm_file[2] = '\0';
         }
+      
+        //if(device+id % NUM_CORES == 0){
+        //    create_sm(shm_file, &device_weight_update_buffers, NUM_CORES, total_filter_elements);
+        //    net->layers[i].weight_updates = device_weight_update_buffers;
+       //}
+        //else{
+         //   sleep(1);
+          //  get_sm(shm_file)
+       // }
 
         else if(layer_type_vector[i] == MAXPOOL){
             //(int batch, int h, int w, int c, int size, int stride, int padding)
@@ -651,22 +644,35 @@ int data_parallelism_main(int argc, char* argv[]){
     else
         outputs = subdivisions*net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w*net->layers[net->n - 1].c;
 
-    //net->input = calloc(net->inputs, sizeof(float));
+    net->input = calloc(net->inputs, sizeof(float));
     net->delta = calloc(net->inputs, sizeof(float));
 
-    //fill_cpu(net->inputs, 0.1, net->input, 1);
-    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+    //fill_cpu(net->inputs, 0.5437, net->input, 1);
+    //fill_cpu(net->layers[net->n - 1].outputs, -0.1, net->layers[net->n - 1].delta, 1);
 
     gettimeofday(&total_time_before, NULL);
 
     int processed_samples = 0;
 
-    float* inference_input = calloc(net->inputs, sizeof(float));
-    fill_cpu(net->inputs, 0.1, inference_input, 1);
+    float* inference_input_orig = net->input;
+
+    float* inference_input = calloc(net->batch*608*608*3, sizeof(float));
+    float* delta_input = calloc(net->batch*net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w*net->layers[net->n - 1].n, sizeof(float));
+    
+    FILE* frptr = fopen("input.dat","r");
+    fread(inference_input, sizeof(float), 608*608*3*net->batch, frptr);
+    fclose(frptr);
+    frptr = fopen("delta_layer_15.dat","r");
+    fread(delta_input, sizeof(float), net->batch*net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w*net->layers[net->n - 1].n, frptr);
+    fclose(frptr);
 
     while(processed_samples < device_batch){
         
-        net->input = inference_input;
+        net->input = inference_input + (device_id*net->inputs);
+        net->layers[net->n - 1].delta = delta_input + (device_id*outputs);
+        inference_input_orig = net->input;
+
+        printf("input %.4f %.4f delta %.4f %.4f\n", net->input[0], net->input[net->inputs-1], net->layers[net->n - 1].delta[0],  net->layers[net->n - 1].delta[outputs-1]);
         //1 forward
         for(int i = 0; i < net->n; i++){
             net->index = i;
@@ -686,7 +692,7 @@ int data_parallelism_main(int argc, char* argv[]){
         }
 
         net->index = 0;
-        net->input = inference_input;
+        net->input = inference_input_orig;
         net->delta = calloc(net->inputs, sizeof(float));;
         printf("Starting backward base\n");
         net->layers[0].backward(net->layers[0], *net);
@@ -694,20 +700,52 @@ int data_parallelism_main(int argc, char* argv[]){
         processed_samples += subdivisions;
         
     }
+    gettimeofday(&total_time_after, NULL);
+    timersub(&total_time_after, &total_time_before, &total_time_result);
+    total_time += (double)(total_time_result.tv_sec + (total_time_result.tv_usec)/1000000.0);
 
-    for (int l = 0; l < net->n; ++l)
-    {
-        if(net->layers[l].type == CONVOLUTIONAL){
+    printf("Total Time = %.4f\n", total_time);
 
-            int filter_size = net->layers[l].size;
-            int num_filters = net->layers[l].n;
-            int num_channels = net->layers[l].c;
-
-            for (int i = 0; i < (filter_size*filter_size*num_filters*num_channels); ++i)
+    int i, d, l;
+    if(device_id == 0){
+        int d = 0;
+        for(d = 1; d < num_devices; d++){
+            for (l = 0; l < net->n; ++l)
             {
-
-                net->layers[l].weights[i] = 0.01;
-            }        
+                if(net->layers[l].type == CONVOLUTIONAL){
+                    int filter_size = net->layers[l].size;
+                    int num_filters = net->layers[l].n;
+                    int num_channels = net->layers[l].c;
+                    receive_data(net->workspace, filter_size*filter_size*num_filters*num_channels, d);
+                    for(i = 0; i < filter_size*filter_size*num_filters*num_channels; i++)
+                        net->layers[l].weight_updates[i] += net->workspace[i]; 
+                }        
+            }
+        }
+        for(d = 1; d < num_devices; d++){
+            for (l = 0; l < net->n; ++l){
+                int filter_size = net->layers[l].size;
+                int num_filters = net->layers[l].n;
+                int num_channels = net->layers[l].c;
+                send_data(net->layers[l].weight_updates, filter_size*filter_size*num_filters*num_channels, d);
+            }
+        }
+    }
+    
+    else{
+        for (int l = 0; l < net->n; ++l){
+            if(net->layers[l].type == CONVOLUTIONAL){
+                int filter_size = net->layers[l].size;
+                int num_filters = net->layers[l].n;
+                int num_channels = net->layers[l].c;
+                send_data(net->layers[l].weight_updates, filter_size*filter_size*num_filters*num_channels, 0);
+                //receive_data(net->workspace, filter_size*filter_size*num_filters*num_channels, d);
+            }
+        }
+        for (int l = 0; l < net->n; ++l){
+            if(net->layers[l].type == CONVOLUTIONAL){
+                receive_data(net->layers[l].weight_updates, net->layers[l].size*net->layers[l].size*net->layers[l].n*net->layers[l].c, 0);
+            }
         }
     }
     //receive_data(net->layers[net->n - 1].delta, outputs, device_id + 1);
@@ -723,41 +761,36 @@ int data_parallelism_main(int argc, char* argv[]){
          net->index = l;
          net->layers[l].learning_rate_scale = 1.0;
          net->layers[l].batch = batch;
-         update_convolutional_layer(net->layers[l], a);
+         //update_convolutional_layer(net->layers[l], a);
     }
 
-    gettimeofday(&total_time_after, NULL);
-    timersub(&total_time_after, &total_time_before, &total_time_result);
-    total_time += (double)(total_time_result.tv_sec + (total_time_result.tv_usec)/1000000.0);
 
-    printf("Total Time = %.4f\n", total_time);
 
     FILE *fptr;
 
-    // use appropriate location if you are using MacOS or Linux
-    fptr = fopen("weights_partitioned.txt","w");
+    if(device_id == 0){
+        // use appropriate location if you are using MacOS or Linux
+        fptr = fopen("weights_partitioned.txt","w");
 
-    if(fptr == NULL)
-    {
-      printf("Error!");   
-      exit(1);             
-    }
-    for (int l = 0; l < net->n; ++l){
+        if(fptr == NULL)
+        {
+            printf("Error!");   
+            exit(1);             
+        }
+        for (int l = 0; l < net->n; ++l){
         
-        if(net->layers[l].type == CONVOLUTIONAL){
-            int num_filters = net->layers[l].n;
-            int filter_size = net->layers[l].size;
-            int channels = net->layers[l].c;
+            if(net->layers[l].type == CONVOLUTIONAL){
+                int num_filters = net->layers[l].n;
+                int filter_size = net->layers[l].size;
+                int channels = net->layers[l].c;
 
-
-            for (int n = 0; n < (channels*filter_size*filter_size*num_filters); ++n)
-            {
-                fprintf(fptr,"%.4f\n", net->layers[l].weight_updates[n]);
+                for (int n = 0; n < (channels*filter_size*filter_size*num_filters); ++n)
+                    fprintf(fptr,"%.4f\n", net->layers[l].weight_updates[n]);
+          
+                fprintf(fptr,"\n\n");
             }
-            fprintf(fptr,"\n\n");
         }
     }
-
     fclose(fptr);
 
     //     net->index = 0;
@@ -783,7 +816,7 @@ int layer_partition_main(int argc, char* argv[]){
     LAYER_TYPE layer_type_vector[16] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
-    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 2, 3, 1, 3, 1};
+    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 3, 2, 3, 1, 3, 2, 3, 1, 3, 1};
     int layer_length_vector[16] = {INPUT_SIZE, INPUT_SIZE, INPUT_SIZE/2, INPUT_SIZE/2, INPUT_SIZE/4,
                 INPUT_SIZE/4, INPUT_SIZE/4, INPUT_SIZE/4, INPUT_SIZE/8, INPUT_SIZE/8,
                 INPUT_SIZE/8, INPUT_SIZE/8, INPUT_SIZE/16, INPUT_SIZE/16, INPUT_SIZE/16,
@@ -809,6 +842,7 @@ int layer_partition_main(int argc, char* argv[]){
     net->seen = calloc(1, sizeof(size_t));
     net->t    = calloc(1, sizeof(int));
     net->cost = calloc(1, sizeof(float));
+    net->batch = 1;
 
     init_transport_common(num_devices, device_id, argv);
 
@@ -873,25 +907,39 @@ int layer_partition_main(int argc, char* argv[]){
     else
         outputs = net->layers[net->n - 1].out_h*net->layers[net->n - 1].out_w*net->layers[net->n - 1].c;
 
-    net->input = calloc(net->inputs, sizeof(float));
     net->delta = calloc(net->inputs, sizeof(float));
 
-    fill_cpu(net->inputs, 0.1, net->input, 1);
-    fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+    //fill_cpu(net->inputs, 0.1, net->input, 1);
+    //fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+
+    float* inference_input = calloc(batch*608*608*3, sizeof(float));
+    float* delta_input = calloc(batch*38*38*256, sizeof(float));
+
+    FILE* frptr = fopen("input.dat","r");
+    fread(inference_input, sizeof(float), 608*608*3*batch, frptr);
+    fclose(frptr);
+    frptr = fopen("delta_layer_15.dat","r");
+    fread(delta_input, sizeof(float), batch*38*38*256, frptr);
+    fclose(frptr);
 
     gettimeofday(&total_time_before, NULL);
 
     int processed_samples = 0;
 
-    float* inference_input = calloc(net->inputs, sizeof(float));
-    fill_cpu(net->inputs, 0.1, inference_input, 1);
+    float* inference_input_orig[2];
 
     while(processed_samples < batch){
         //1 get forward[processed_samples] from dev l-1
-        if(device_id == 0)
-            fill_cpu(net->inputs, 0.1, net->input, 1);
-        else
+        if(device_id == 0){
+            //fill_cpu(net->inputs, 0.1, net->input, 1);
+            net->input = inference_input + net->inputs*processed_samples;
+            inference_input_orig[processed_samples] = net->input;
+        }
+        else{
+            net->input = calloc(net->inputs, sizeof(float));
             receive_data(net->input, net->inputs, device_id - 1);
+            inference_input_orig[processed_samples] = net->input;
+        }
         
         //2 forward
         for(int i = 0; i < net->n; i++){
@@ -913,8 +961,9 @@ int layer_partition_main(int argc, char* argv[]){
     while(processed_samples < batch){
         
         //4 get backward[processed_samples] from dev l+1
-        if(device_id == (num_devices - 1))
-            fill_cpu(net->layers[net->n - 1].outputs, 0.1, net->layers[net->n - 1].delta, 1);
+        if(device_id == (num_devices - 1)){
+            net->layers[net->n - 1].delta = delta_input + outputs*processed_samples;
+        }
         else
             receive_data(net->layers[net->n - 1].delta, outputs, device_id + 1);
 
@@ -929,10 +978,11 @@ int layer_partition_main(int argc, char* argv[]){
         }
 
         net->index = 0;
-        net->input = inference_input;
+        net->input = inference_input_orig[processed_samples];
         net->delta = calloc(net->inputs, sizeof(float));;
         printf("Starting backward base\n");
         net->layers[0].backward(net->layers[0], *net);
+        //free(net->delta);
         // net->layers[0].learning_rate_scale = 1.0;
         // update_convolutional_layer(net->layers[0], a);
 
@@ -955,7 +1005,7 @@ int layer_partition_main(int argc, char* argv[]){
          net->index = l;
          net->layers[l].learning_rate_scale = 1.0;
          net->layers[l].batch = batch;
-         update_convolutional_layer(net->layers[l], a);
+         //update_convolutional_layer(net->layers[l], a);
     }
 
     gettimeofday(&total_time_after, NULL);
@@ -967,7 +1017,12 @@ int layer_partition_main(int argc, char* argv[]){
     FILE *fptr;
 
     // use appropriate location if you are using MacOS or Linux
-    fptr = fopen("weights_partitioned.txt","w");
+    char weights_file[30];
+    char* prefix = "weights_layer_partitioned_";
+    strcpy(weights_file, prefix);
+    weights_file[strlen(prefix)] = '0' + device_id;
+    weights_file[strlen(prefix) + 1] = '\0';
+    fptr = fopen(weights_file, "w");
 
     if(fptr == NULL)
     {
@@ -1005,7 +1060,7 @@ int layer_partition_main(int argc, char* argv[]){
 
 
 int main(int argc, char* argv[]){
-    //data_parallelism_main(argc, argv);
+    data_parallelism_main(argc, argv);
     //layer_partition_main(argc, argv);
-    main_yolo();
+    //main_yolo();
 }

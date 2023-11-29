@@ -17,7 +17,7 @@ void config_init(int argc, char* argv[]){
     LAYER_TYPE layer_type_vector[16] = {CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL,
                                    CONVOLUTIONAL, MAXPOOL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL, CONVOLUTIONAL};
-    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 1, 2, 3, 1, 3, 2, 3, 1, 3, 1};
+    int filter_size_vector[16] = {3, 2, 3, 2, 3, 1, 3, 2, 3, 1, 3, 2, 3, 1, 3, 1};
 
     int INPUT_WIDTH = 608;
     int INPUT_HEIGHT = 608;
@@ -93,13 +93,13 @@ void config_init(int argc, char* argv[]){
         network_params_tile.delta_dim_with_boundry_vector[i].depth = network_params_tile.featuremap_dim_with_boundry_vector[i+1].depth;
     }
 
-    ftp_params.NUM_GROUPS_FORWARD = num_layers;
+    ftp_params.NUM_GROUPS_FORWARD = 1;//num_layers;
 
     ftp_params.sync_group_vector_forward[0] = 0;
-    ftp_params.sync_group_vector_forward[1] = 1;
-    ftp_params.sync_group_vector_forward[2] = 2;
-    ftp_params.sync_group_vector_forward[3] = 3;
-    ftp_params.sync_group_vector_forward[4] = 4;
+    ftp_params.sync_group_vector_forward[1] = 8;
+    ftp_params.sync_group_vector_forward[2] = 10;
+    ftp_params.sync_group_vector_forward[3] = 12;
+    ftp_params.sync_group_vector_forward[4] = 14;
     ftp_params.sync_group_vector_forward[5] = 5;
     ftp_params.sync_group_vector_forward[6] = 6;
     ftp_params.sync_group_vector_forward[7] = 7;
@@ -112,11 +112,11 @@ void config_init(int argc, char* argv[]){
     ftp_params.sync_group_vector_forward[14] = 14;
     ftp_params.sync_group_vector_forward[15] = 15;
 
-    ftp_params.NUM_GROUPS_BACKWARD = num_layers - 1;
+    ftp_params.NUM_GROUPS_BACKWARD = 1;//num_layers - 1;
 
-    ftp_params.sync_group_vector_backward[0] = 1;
-    ftp_params.sync_group_vector_backward[1] = 2;
-    ftp_params.sync_group_vector_backward[2] = 3;
+    ftp_params.sync_group_vector_backward[0] = 15;
+    ftp_params.sync_group_vector_backward[1] = 13;
+    ftp_params.sync_group_vector_backward[2] = 15;
     ftp_params.sync_group_vector_backward[3] = 4;
     ftp_params.sync_group_vector_backward[4] = 5;
     ftp_params.sync_group_vector_backward[5] = 6;
@@ -209,23 +209,6 @@ void init_network(network** net_inp){
         net->layers[i].top_boundry_edges_delta = network_params_tile.delta_edges_vector[i].top_boundry_edges;
 
     }
-
-    int max = 0;
-    for (int i = 0; i < net->n; ++i)
-    {
-        printf("%d\n", net->layers[i].workspace_size);
-        if(net->layers[i].workspace_size > max){
-            max = net->layers[i].workspace_size;
-        }
-    }
-    printf("wsize = %d inputs = %d outputs = %d\n", max*sizeof(float), net->inputs, net->layers[0].outputs);
-    
-    #ifdef GPU
-        net->workspace = cuda_make_array(0, (max-1)/sizeof(float)+1);
-    #else
-        net->workspace = calloc(max, sizeof(float));
-    #endif
-
     printf("%p\n", net);
 }
 
